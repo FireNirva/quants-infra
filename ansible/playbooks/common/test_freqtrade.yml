@@ -1,0 +1,48 @@
+---
+- name: 测试 Freqtrade 安装
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: true
+
+  vars:
+    ft_dir: "/opt/freqtrade"
+
+  tasks:
+    - name: 检查 Freqtrade 容器状态
+      command: docker ps -f name=freqtrade
+      register: container_status
+      changed_when: false
+
+    - name: 获取 Freqtrade 版本
+      command: docker exec freqtrade freqtrade --version
+      register: version_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: 检查用户数据目录
+      stat:
+        path: "{{ ft_dir }}/user_data"
+      register: user_data_check
+
+    - name: 检查配置文件
+      stat:
+        path: "{{ ft_dir }}/user_data/config.json"
+      register: config_check
+
+    - name: 收集测试结果
+      set_fact:
+        test_results:
+          container_status: "{{ container_status.stdout }}"
+          version: "{{ version_check.stdout if version_check.rc == 0 else 'unknown' }}"
+          user_data_exists: "{{ user_data_check.stat.exists }}"
+          config_exists: "{{ config_check.stat.exists }}"
+
+    - name: 显示测试报告
+      debug:
+        msg:
+          - "Freqtrade 测试报告:"
+          - "容器状态: {{ test_results.container_status }}"
+          - "版本: {{ test_results.version }}"
+          - "用户数据目录: {{ 'exists' if test_results.user_data_exists else 'missing' }}"
+          - "配置文件: {{ 'exists' if test_results.config_exists else 'missing' }}" 

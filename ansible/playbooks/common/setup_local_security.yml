@@ -1,0 +1,136 @@
+---
+- name: 配置本地系统安全设置
+  hosts: localhost
+  connection: local
+  become: true
+  become_method: sudo
+  vars:
+    # 允许从任何地方访问的端口
+    public_ports:
+      - { port: "{{ ansible_port }}", proto: "tcp", comment: "SSH" }
+      - { port: "{{ wireguard_port }}", proto: "udp", comment: "WireGuard VPN" }
+      # Binance API 访问端口
+      - { port: "443", proto: "tcp", comment: "HTTPS (Binance API)" }
+      - { port: "80", proto: "tcp", comment: "HTTP" }
+
+    # 只允许从 VPN 网络访问的服务端口
+    vpn_only_ports:
+      - { port: "9090", proto: "tcp", comment: "Prometheus (VPN only)" }
+      - { port: "3000", proto: "tcp", comment: "Grafana (VPN only)" }
+      - { port: "8080", proto: "tcp", comment: "Freqtrade WebUI Server (VPN only)" }
+
+  tasks:
+    - name: 停止并禁用 UFW（如果存在）
+      service:
+        name: ufw
+        state: stopped
+        enabled: no
+      ignore_errors: true
+
+    - name: 清空所有 iptables 规则
+      shell: |
+        iptables -F
+        iptables -X
+        iptables -t nat -F
+        iptables -t nat -X
+        iptables -t mangle -F
+        iptables -t mangle -X
+
+    - name: 设置默认策略
+      iptables:
+        chain: "{{ item }}"
+        policy: DROP
+      with_items:
+        - INPUT
+        - FORWARD
+      ignore_errors: true
+
+    - name: 设置 OUTPUT 链默认策略为 ACCEPT
+      iptables:
+        chain: OUTPUT
+        policy: ACCEPT
+
+    - name: 允许已建立的连接
+      iptables:
+        chain: INPUT
+        ctstate: ESTABLISHED,RELATED
+        jump: ACCEPT
+
+    - name: 允许本地回环接口
+      iptables:
+        chain: INPUT
+        in_interface: lo
+        jump: ACCEPT
+
+    - name: 允许公开访问的端口
+      iptables:
+        chain: INPUT
+        protocol: "{{ item.proto }}"
+        destination_port: "{{ item.port }}"
+        jump: ACCEPT
+        comment: "{{ item.comment }}"
+      with_items: "{{ public_ports }}"
+
+    - name: 允许从 VPN 网络访问特定端口
+      iptables:
+        chain: INPUT
+        protocol: "{{ item.proto }}"
+        destination_port: "{{ item.port }}"
+        source: "10.0.0.0/24"
+        jump: ACCEPT
+        comment: "{{ item.comment }}"
+      with_items: "{{ vpn_only_ports }}"
+
+    - name: 允许 VPN 接口流量
+      iptables:
+        chain: INPUT
+        in_interface: wg0
+        jump: ACCEPT
+
+    - name: 允许 ICMP
+      iptables:
+        chain: INPUT
+        protocol: icmp
+        jump: ACCEPT
+
+    - name: 保存 iptables 规则
+      shell: |
+        mkdir -p /etc/iptables
+        iptables-save > /etc/iptables/rules.v4
+
+    - name: 配置系统安全参数
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      with_items:
+        - { key: 'net.ipv4.ip_forward', value: '1' }
+        - { key: 'net.ipv4.conf.all.rp_filter', value: '1' }
+        - { key: 'net.ipv4.conf.default.rp_filter', value: '1' }
+        - { key: 'net.ipv4.icmp_echo_ignore_broadcasts', value: '1' }
+        - { key: 'net.ipv4.conf.all.accept_source_route', value: '0' }
+        - { key: 'net.ipv4.conf.default.accept_source_route', value: '0' }
+        - { key: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+        - { key: 'net.ipv4.conf.default.accept_redirects', value: '0' }
+        - { key: 'net.ipv4.conf.all.secure_redirects', value: '0' }
+        - { key: 'net.ipv4.conf.default.secure_redirects', value: '0' }
+        - { key: 'net.ipv4.icmp_ignore_bogus_error_responses', value: '1' }
+        - { key: 'net.ipv4.tcp_syncookies', value: '1' }
+        - { key: 'net.ipv4.tcp_max_syn_backlog', value: '2048' }
+        - { key: 'net.ipv4.tcp_synack_retries', value: '2' }
+        - { key: 'net.ipv4.tcp_syn_retries', value: '5' }
+
+    - name: 安装 iptables-persistent
+      apt:
+        name: iptables-persistent
+        state: present
+      ignore_errors: true
+
+    - name: 验证 iptables 规则
+      shell: iptables -L -v -n
+      register: iptables_status
+
+    - name: 显示 iptables 规则
+      debug:
+        var: iptables_status.stdout_lines

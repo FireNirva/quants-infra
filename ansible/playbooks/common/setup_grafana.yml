@@ -1,0 +1,54 @@
+---
+- name: 配置 Grafana Docker 环境
+  hosts: localhost
+  gather_facts: true
+
+  tasks:
+    - name: 确保 Docker 已安装
+      command: docker --version
+      register: docker_check
+      ignore_errors: true
+
+    - name: 检查 Docker Compose 是否已安装
+      command: docker compose version
+      register: compose_check
+      ignore_errors: true
+
+    - name: 清理旧的 Grafana 系统服务和文件（如果存在）
+      become: true
+      become_method: sudo
+      block:
+        - name: 停止并禁用 Grafana 服务（如果存在）
+          systemd:
+            name: grafana-server
+            state: stopped
+            enabled: no
+          ignore_errors: true
+
+        - name: 删除旧的 Grafana 配置目录
+          file:
+            path: "/etc/grafana"
+            state: absent
+
+        - name: 删除旧的 Grafana 数据目录
+          file:
+            path: "/var/lib/grafana"
+            state: absent
+
+        - name: 删除 Grafana APT 源
+          file:
+            path: "/etc/apt/sources.list.d/grafana.list"
+            state: absent
+          when: ansible_os_family == "Debian"
+
+        - name: 删除 Grafana YUM 源
+          file:
+            path: "/etc/yum.repos.d/grafana.repo"
+            state: absent
+          when: ansible_os_family == "RedHat"
+
+        - name: 卸载 Grafana 包
+          package:
+            name: grafana
+            state: absent
+          ignore_errors: true 

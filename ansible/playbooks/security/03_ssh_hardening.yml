@@ -1,0 +1,377 @@
+---
+# SSH 安全加固 Playbook
+# 实施 SSH 最佳安全实践
+
+- name: SSH Security Hardening
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # 默认值，可由 extra_vars 覆盖
+    ssh_port: 6677
+    ssh_config_file: /etc/ssh/sshd_config
+    backup_dir: /opt/backups
+  
+  tasks:
+    - name: Ensure backup directory exists
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
+    
+    - name: Backup current SSH configuration
+      copy:
+        src: "{{ ssh_config_file }}"
+        dest: "{{ backup_dir }}/sshd_config.backup.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        mode: '0600'
+    
+    - name: Display warning message
+      debug:
+        msg:
+          - "⚠️  WARNING: SSH Configuration Changes ⚠️"
+          - "This playbook will modify SSH settings:"
+          - "  - Change SSH port to {{ ssh_port }}"
+          - "  - Disable password authentication"
+          - "  - Disable root login"
+          - "  - Enable key-based authentication only"
+          - ""
+          - "Ensure you have SSH key access before proceeding!"
+          - "Backup saved to: {{ backup_dir }}"
+    
+    - name: Wait for user confirmation (pause)
+      pause:
+        seconds: 3
+    
+    - name: Configure SSH port
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?Port '
+        line: "Port {{ ssh_port }}"
+        state: present
+        backup: yes
+      notify: restart sshd
+    
+    - name: Disable password authentication
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?PasswordAuthentication '
+        line: 'PasswordAuthentication no'
+        state: present
+      notify: restart sshd
+    
+    - name: Disable challenge-response authentication
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?ChallengeResponseAuthentication '
+        line: 'ChallengeResponseAuthentication no'
+        state: present
+      notify: restart sshd
+    
+    - name: Keep PAM authentication enabled (required for cloud environments)
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?UsePAM '
+        line: 'UsePAM yes'
+        state: present
+      notify: restart sshd
+    
+    - name: Enable public key authentication
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?PubkeyAuthentication '
+        line: 'PubkeyAuthentication yes'
+        state: present
+      notify: restart sshd
+    
+    - name: Configure AuthorizedKeysFile explicitly (fix EC2 Instance Connect issue)
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?AuthorizedKeysFile '
+        line: 'AuthorizedKeysFile .ssh/authorized_keys'
+        state: present
+      notify: restart sshd
+    
+    - name: Ensure .ssh directory exists for target user
+      file:
+        path: /home/ubuntu/.ssh
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0700'
+    
+    - name: Ensure authorized_keys has correct permissions
+      file:
+        path: /home/ubuntu/.ssh/authorized_keys
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+        state: file
+      register: auth_keys_check
+      failed_when: false
+    
+    - name: Debug - Show authorized_keys file status
+      debug:
+        msg:
+          - "Authorized keys file exists: {{ auth_keys_check.stat.exists | default(false) }}"
+          - "Authorized keys file path: /home/ubuntu/.ssh/authorized_keys"
+      when: auth_keys_check is defined
+    
+    - name: Disable root login
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?PermitRootLogin '
+        line: 'PermitRootLogin no'
+        state: present
+      notify: restart sshd
+    
+    - name: Disable empty passwords
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?PermitEmptyPasswords '
+        line: 'PermitEmptyPasswords no'
+        state: present
+      notify: restart sshd
+    
+    - name: Disable X11 forwarding
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?X11Forwarding '
+        line: 'X11Forwarding no'
+        state: present
+      notify: restart sshd
+    
+    - name: Set maximum authentication attempts
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?MaxAuthTries '
+        line: 'MaxAuthTries 3'
+        state: present
+      notify: restart sshd
+    
+    - name: Set maximum concurrent sessions
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?MaxSessions '
+        line: 'MaxSessions 5'
+        state: present
+      notify: restart sshd
+    
+    - name: Configure client alive interval (prevent timeout)
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?ClientAliveInterval '
+        line: 'ClientAliveInterval 300'
+        state: present
+      notify: restart sshd
+    
+    - name: Configure client alive count max
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?ClientAliveCountMax '
+        line: 'ClientAliveCountMax 2'
+        state: present
+      notify: restart sshd
+    
+    - name: Configure login grace time
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?LoginGraceTime '
+        line: 'LoginGraceTime 60'
+        state: present
+      notify: restart sshd
+    
+    - name: Use strong MACs
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?MACs '
+        line: 'MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256'
+        state: present
+      notify: restart sshd
+    
+    - name: Use strong ciphers
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?Ciphers '
+        line: 'Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr'
+        state: present
+      notify: restart sshd
+    
+    - name: Use strong key exchange algorithms
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?KexAlgorithms '
+        line: 'KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group-exchange-sha256'
+        state: present
+      notify: restart sshd
+    
+    - name: Disable TCP forwarding (optional, adjust based on needs)
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?AllowTcpForwarding '
+        line: 'AllowTcpForwarding no'
+        state: present
+      notify: restart sshd
+      tags: 
+        - optional
+    
+    - name: Disable agent forwarding (optional)
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?AllowAgentForwarding '
+        line: 'AllowAgentForwarding no'
+        state: present
+      notify: restart sshd
+      tags:
+        - optional
+    
+    - name: Set banner (optional)
+      copy:
+        dest: /etc/ssh/banner
+        content: |
+          ******************************************************************************
+          *                                                                            *
+          *  WARNING: Unauthorized access to this system is forbidden and will be      *
+          *  prosecuted by law. By accessing this system, you agree that your actions  *
+          *  may be monitored if unauthorized usage is suspected.                      *
+          *                                                                            *
+          *  Quants Infrastructure - Secure Trading Environment                        *
+          *                                                                            *
+          ******************************************************************************
+        mode: '0644'
+      tags:
+        - optional
+    
+    - name: Configure banner in sshd_config
+      lineinfile:
+        path: "{{ ssh_config_file }}"
+        regexp: '^#?Banner '
+        line: 'Banner /etc/ssh/banner'
+        state: present
+      notify: restart sshd
+      tags:
+        - optional
+    
+    - name: Validate SSH configuration
+      command: sshd -t
+      register: sshd_test
+      changed_when: false
+      failed_when: sshd_test.rc != 0
+    
+    - name: Display SSH test result
+      debug:
+        msg: "✓ SSH configuration is valid"
+      when: sshd_test.rc == 0
+    
+    # 在重启 SSH 之前，确保防火墙已配置正确的端口
+    # 检查新端口（6677）或当前端口（22），任意一个在防火墙中即可
+    - name: Verify firewall allows SSH port (current or new)
+      shell: |
+        # 检查新端口 6677 或当前端口 22
+        if iptables -L INPUT -n | grep -q "tcp dpt:6677"; then
+          echo "✓ SSH port 6677 is allowed in firewall (ready for hardening)"
+          exit 0
+        elif iptables -L INPUT -n | grep -q "tcp dpt:22"; then
+          echo "✓ SSH port 22 is allowed in firewall (current port)"
+          exit 0
+        else
+          echo "WARNING: Neither SSH port 22 nor 6677 found in firewall rules!"
+          echo "Please ensure firewall is configured before SSH restart"
+          exit 1
+        fi
+      register: firewall_check
+      changed_when: false
+      failed_when: false
+    
+    - name: Display firewall check result
+      debug:
+        var: firewall_check.stdout_lines
+    
+    - name: Warning if firewall not configured
+      debug:
+        msg:
+          - "⚠️  CRITICAL WARNING ⚠️"
+          - "Firewall does not have SSH ports configured!"
+          - "DO NOT restart SSH without configuring firewall first!"
+          - "You may lose access to the system!"
+      when: firewall_check.rc != 0
+    
+    - name: Skip SSH restart if firewall not configured (for safety)
+      debug:
+        msg: "⚠️  Skipping SSH service restart due to firewall configuration warning"
+      when: firewall_check.rc != 0
+    
+    - name: Restart SSH service now (explicit restart)
+      systemd:
+        name: sshd
+        state: restarted
+      when: firewall_check.rc == 0
+      register: ssh_restart_result
+    
+    - name: Wait for SSH to be available on new port
+      wait_for:
+        port: "{{ ssh_port }}"
+        host: "{{ inventory_hostname }}"
+        delay: 5
+        timeout: 60
+        state: started
+      delegate_to: localhost
+      become: no
+      when: firewall_check.rc == 0
+    
+    - name: Create SSH hardening completion marker
+      copy:
+        dest: /etc/quants-security/ssh_hardening_completed
+        content: |
+          SSH Hardening Completed
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          SSH Port: {{ ssh_port }}
+          Password Auth: Disabled
+          Root Login: Disabled
+          Key Auth: Enabled
+          Configuration Backup: {{ backup_dir }}/sshd_config.backup.{{ ansible_date_time.epoch }}
+          SSH Service Restarted: Yes
+        mode: '0644'
+      when: firewall_check.rc == 0
+    
+    - name: Display completion message
+      debug:
+        msg:
+          - "============================================"
+          - "SSH Security Hardening Completed"
+          - "============================================"
+          - "⚠️  IMPORTANT CHANGES:"
+          - "  - SSH Port changed to: {{ ssh_port }}"
+          - "  - Password authentication: DISABLED"
+          - "  - Root login: DISABLED"
+          - "  - Key-based authentication: ENABLED"
+          - ""
+          - "Next Steps:"
+          - "  1. SSH service will restart automatically"
+          - "  2. Test new connection: ssh -p {{ ssh_port }} user@host"
+          - "  3. Keep current session open until verified!"
+          - ""
+          - "Rollback (if needed):"
+          - "  sudo cp {{ backup_dir }}/sshd_config.backup.* /etc/ssh/sshd_config"
+          - "  sudo systemctl restart sshd"
+          - "============================================"
+  
+  handlers:
+    - name: restart sshd
+      systemd:
+        name: sshd
+        state: restarted
+      async: 0
+      poll: 0
+      ignore_errors: yes
+    
+    - name: wait for ssh to come back
+      wait_for:
+        port: "{{ ssh_port }}"
+        host: "{{ ansible_host }}"
+        delay: 5
+        timeout: 60
+      delegate_to: localhost
+      become: no
+

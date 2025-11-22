@@ -1,0 +1,96 @@
+---
+- name: 配置远程系统安全设置
+  hosts: all
+  become: true
+  become_method: sudo
+  vars:
+    ssh_port: "{{ ansible_port | default('6677') }}"
+    vpn_only_ports:
+      - { port: "9100", proto: "tcp", comment: "Node Exporter (VPN only)" }
+      - { port: "8080", proto: "tcp", comment: "Freqtrade WebUI Client (VPN only)" }
+    public_ports:
+      - { port: "{{ wireguard_port }}", proto: "udp", comment: "WireGuard VPN" }
+
+  tasks:
+    - name: 调试 ansible_port 变量
+      debug:
+        msg: "ansible_port 的值为 {{ ansible_port }}"
+
+    - name: 获取远程主机名
+      command: hostname
+      register: hostname_result
+
+    - name: 显示远程主机名
+      debug:
+        msg: "Ansible 连接的主机名为 {{ hostname_result.stdout }}"
+
+    - name: 获取远程主机 IP 地址
+      command: hostname -I
+      register: ip_result
+
+    - name: 显示远程主机 IP 地址
+      debug:
+        msg: "Ansible 连接的主机 IP 为 {{ ip_result.stdout }}"
+
+    - name: 验证这是远程主机
+      fail:
+        msg: "这个 playbook 只能在远程主机上运行"
+      when: inventory_hostname == 'localhost' or inventory_hostname == '127.0.0.1'
+
+    - name: 在 /tmp 目录创建标识文件
+      file:
+        path: /tmp/ansible_test_file
+        state: touch
+        mode: '0644'
+      register: test_file_result
+
+    - name: 显示创建标识文件的结果
+      debug:
+        var: test_file_result
+
+    - name: 安装 iptables-persistent
+      apt:
+        name: iptables-persistent
+        state: present
+        update_cache: true
+      register: install_result
+      until: install_result is success
+      retries: 5
+      delay: 10
+
+    - name: 创建 iptables 规则保存目录
+      file:
+        path: /etc/iptables
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: 使用模板创建 iptables 规则文件
+      template:
+        src: ../templates/security/iptables.rules.j2
+        dest: /etc/iptables/rules.v4
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: 使用 iptables-restore 应用 iptables 规则
+      command: iptables-restore /etc/iptables/rules.v4
+
+    - name: 确保规则在启动时加载
+      copy:
+        dest: /etc/network/if-pre-up.d/iptables
+        content: |
+          #!/bin/sh
+          iptables-restore < /etc/iptables/rules.v4
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: 验证 iptables 规则
+      shell: iptables -L -v -n
+      register: iptables_status
+
+    - name: 显示 iptables 规则
+      debug:
+        var: iptables_status.stdout_lines

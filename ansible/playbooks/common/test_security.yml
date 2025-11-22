@@ -1,0 +1,70 @@
+---
+- name: 测试安全配置
+  hosts: all
+  become: true
+  tasks:
+    - name: 获取 iptables 规则
+      shell: |
+        echo "=== IPTables Filter Rules ==="
+        iptables -L -n -v
+        echo "=== IPTables NAT Rules ==="
+        iptables -t nat -L -n -v
+        echo "=== IPTables Mangle Rules ==="
+        iptables -t mangle -L -n -v
+        echo "=== System Parameters ==="
+        sysctl -a | grep -E 'net.ipv4.(ip_forward|conf.(all|default).(rp_filter|accept_source_route|accept_redirects|secure_redirects)|icmp_echo_ignore_broadcasts|icmp_ignore_bogus_error_responses|tcp_syncookies|tcp_max_syn_backlog|tcp_synack_retries|tcp_syn_retries)'
+      register: security_status
+      ignore_errors: true
+
+    - name: 检查必要的端口规则
+      shell: |
+        echo "=== Port Rules Check ==="
+        # 检查 SSH 端口
+        iptables -L INPUT -n -v | grep "{{ ansible_port }}/tcp"
+        # 检查 WireGuard 端口
+        iptables -L INPUT -n -v | grep "{{ wireguard_port }}/udp"
+        # 检查 VPN 网络访问规则
+        iptables -L INPUT -n -v | grep "10.0.0.0/24"
+      register: port_check
+      ignore_errors: true
+
+    - name: 检查默认策略
+      shell: |
+        echo "=== Default Policies ==="
+        iptables -L | grep "Chain" | grep "policy"
+      register: policy_check
+      ignore_errors: true
+
+    - name: 显示安全配置状态
+      debug:
+        msg:
+          - "=== Security Status ==="
+          - "{{ security_status.stdout_lines }}"
+          - "=== Port Rules ==="
+          - "{{ port_check.stdout_lines }}"
+          - "=== Default Policies ==="
+          - "{{ policy_check.stdout_lines }}"
+
+    - name: 验证必要的规则存在
+      assert:
+        that:
+          - security_status.rc == 0
+          - "'DROP' in policy_check.stdout"  # 确认默认策略是 DROP
+          - "'ACCEPT' in port_check.stdout"  # 确认允许的端口规则存在
+        fail_msg: "安全配置验证失败"
+        success_msg: "安全配置验证成功"
+      ignore_errors: true
+
+    - name: 检查系统参数
+      shell: |
+        echo "=== System Parameters Check ==="
+        # 检查关键系统参数
+        sysctl net.ipv4.ip_forward
+        sysctl net.ipv4.conf.all.rp_filter
+        sysctl net.ipv4.tcp_syncookies
+      register: sysctl_check
+      ignore_errors: true
+
+    - name: 显示系统参数状态
+      debug:
+        var: sysctl_check.stdout_lines

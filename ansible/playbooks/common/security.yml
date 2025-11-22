@@ -1,0 +1,6 @@
+---
+- import_playbook: setup_local_security.yml
+  when: "'localhost' in inventory_hostname"
+
+- import_playbook: setup_remote_security.yml
+  when: "'localhost' not in inventory_hostname" 

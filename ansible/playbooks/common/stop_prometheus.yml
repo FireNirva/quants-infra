@@ -1,0 +1,36 @@
+---
+- name: 停止并清理 Prometheus
+  hosts: localhost
+  connection: local
+  become: true
+  tasks:
+    - name: 停止 Prometheus 容器
+      shell: |
+        if [ -f /tmp/prometheus/docker-compose.yml ]; then
+          cd /tmp/prometheus && docker compose down -v
+        fi
+      ignore_errors: true
+
+    - name: 检查 Prometheus 网络是否存在
+      shell: docker network ls | grep prometheus_monitoring
+      register: network_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: 删除 Prometheus 网络
+      shell: docker network rm prometheus_monitoring
+      when: network_check.rc == 0
+      ignore_errors: true
+
+    - name: 删除 Prometheus 数据目录
+      file:
+        path: /tmp/prometheus
+        state: absent
+
+    - name: 清理 Docker 卷
+      shell: |
+        volumes=$(docker volume ls -q | grep prometheus) || true
+        if [ ! -z "$volumes" ]; then
+          docker volume rm $volumes
+        fi
+      ignore_errors: true 

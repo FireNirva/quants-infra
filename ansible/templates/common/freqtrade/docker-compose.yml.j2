@@ -1,0 +1,17 @@
+---
+version: '3'
+services:
+  freqtrade:
+    image: freqtradeorg/freqtrade:stable
+    # 使用自定义的配置文件和策略
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade.log
+      --config /freqtrade/user_data/{{ base_config }}
+      --config /freqtrade/user_data/{{ strategy_config }}
+      --strategy {{ strategy_name }}
+    restart: unless-stopped
+    container_name: freqtrade
+    network_mode: "host"
+    volumes:
+      - "./user_data:/freqtrade/user_data"

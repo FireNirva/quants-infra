@@ -1,0 +1,103 @@
+---
+- name: 测试 Docker 安装和功能
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: true
+
+  tasks:
+    - name: 检查 Docker 服务状态
+      service_facts:
+      register: service_state
+
+    - name: 显示 Docker 服务状态
+      debug:
+        msg: "Docker 服务状态: {{ service_state.ansible_facts.services['docker.service'].state }}"
+
+    - name: 检查 Docker 版本
+      command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: 显示 Docker 版本
+      debug:
+        var: docker_version.stdout
+
+    - name: 检查 Docker 组成员
+      command: groups {{ ansible_user }}
+      register: user_groups
+      changed_when: false
+
+    - name: 显示用户组信息
+      debug:
+        msg: "用户组: {{ user_groups.stdout }}"
+
+    - name: 测试 Docker hello-world
+      docker_container:
+        name: hello-world
+        image: hello-world
+        state: started
+      register: docker_test
+
+    - name: 显示测试结果
+      debug:
+        var: docker_test
+
+    - name: 检查 Docker 系统信息
+      command: docker system info
+      register: docker_info
+      changed_when: false
+
+    - name: 显示 Docker 系统信息
+      debug:
+        var: docker_info.stdout_lines
+
+    - name: 检查 Docker 网络
+      command: docker network ls
+      register: docker_networks
+      changed_when: false
+
+    - name: 显示 Docker 网络
+      debug:
+        var: docker_networks.stdout_lines
+
+    - name: 检查 Docker 磁盘使用
+      command: docker system df
+      register: docker_disk
+      changed_when: false
+
+    - name: 显示 Docker 磁盘使用
+      debug:
+        var: docker_disk.stdout_lines
+
+    - name: 清理测试容器
+      docker_container:
+        name: hello-world
+        state: absent
+
+    - name: 收集测试结果
+      set_fact:
+        docker_test_results:
+          service_status: "{{ service_state.ansible_facts.services['docker.service'].state }}"
+          version: "{{ docker_version.stdout }}"
+          hello_world_test: "{{ docker_test.container.State.Status == 'exited' and docker_test.container.State.ExitCode == 0 }}"
+          user_in_docker_group: "'docker' in user_groups.stdout"
+
+    - name: 显示测试报告
+      debug:
+        msg:
+          - "Docker 测试报告:"
+          - "服务状态: {{ docker_test_results.service_status }}"
+          - "Docker 版本: {{ docker_test_results.version }}"
+          - "Hello World 测试: {{ 'Pass' if docker_test_results.hello_world_test else 'Fail' }}"
+          - "用户 Docker 组配置: {{ 'Pass' if docker_test_results.user_in_docker_group else 'Fail' }}"
+
+    - name: 验证测试结果
+      assert:
+        that:
+          - service_state.ansible_facts.services['docker.service'].state == "running"
+          - docker_version.rc == 0
+          - docker_test_results.hello_world_test
+          - docker_test_results.user_in_docker_group
+        fail_msg: "Docker 测试失败"
+        success_msg: "Docker 测试通过" 

@@ -1,0 +1,57 @@
+---
+- name: 停止所有 Docker 容器
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: true
+
+  tasks:
+    - name: 获取所有运行中的容器
+      command: docker ps -q
+      register: running_containers
+      changed_when: false
+
+    - name: 显示运行中的容器
+      debug:
+        msg: "运行中的容器: {{ running_containers.stdout_lines }}"
+
+    - name: 停止所有运行中的容器
+      docker_container:
+        name: "{{ item }}"
+        state: stopped
+      with_items: "{{ running_containers.stdout_lines }}"
+      when: running_containers.stdout_lines | length > 0
+
+    - name: 获取所有容器（包括已停止的）
+      command: docker ps -aq
+      register: all_containers
+      changed_when: false
+
+    - name: 显示所有容器
+      debug:
+        msg: "所有容器: {{ all_containers.stdout_lines }}"
+
+    - name: 删除所有容器
+      docker_container:
+        name: "{{ item }}"
+        state: absent
+        force_kill: yes
+      with_items: "{{ all_containers.stdout_lines }}"
+      when: all_containers.stdout_lines | length > 0
+
+    - name: 检查 Docker 服务状态
+      service_facts:
+      register: service_state
+
+    - name: 停止 Docker 服务
+      service:
+        name: docker
+        state: stopped
+      when: service_state.ansible_facts.services['docker.service'].state == "running"
+
+    - name: 显示操作结果
+      debug:
+        msg: 
+          - "已停止的容器数量: {{ running_containers.stdout_lines | length }}"
+          - "已删除的容器数量: {{ all_containers.stdout_lines | length }}"
+          - "Docker 服务状态: 已停止" 

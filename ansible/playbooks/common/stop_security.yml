@@ -1,0 +1,55 @@
+---
+- name: 停止并重置安全配置
+  hosts: all
+  become: true
+  become_method: sudo
+  become_user: root
+  gather_facts: true
+
+  tasks:
+    - name: 清理所有 iptables 规则
+      shell: |
+        # 清空所有规则
+        iptables -F
+        iptables -X
+        iptables -t nat -F
+        iptables -t nat -X
+        iptables -t mangle -F
+        iptables -t mangle -X
+        
+        # 设置默认策略为 ACCEPT
+        iptables -P INPUT ACCEPT
+        iptables -P FORWARD ACCEPT
+        iptables -P OUTPUT ACCEPT
+
+    - name: 创建 iptables 规则保存目录
+      file:
+        path: /etc/iptables
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: 保存清空的规则
+      shell: |
+        iptables-save > /etc/iptables/rules.v4
+
+    - name: 确保规则在启动时加载
+      lineinfile:
+        path: /etc/network/if-pre-up.d/iptables
+        line: "{{ item }}"
+        create: true
+        mode: '0755'
+      with_items:
+        - "#!/bin/sh"
+        - "iptables-restore < /etc/iptables/rules.v4"
+
+    - name: 验证最终状态
+      shell: |
+        echo "=== IPTables Rules ==="
+        iptables -L -n -v
+      register: final_status
+
+    - name: 显示最终状态
+      debug:
+        var: final_status.stdout_lines

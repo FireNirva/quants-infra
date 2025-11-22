@@ -1,0 +1,133 @@
+---
+- name: 配置 WireGuard VPN
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: true
+  
+  vars:
+    wireguard_port: 51820
+    internal_service_port: 8080
+    vpn_cidr: "10.0.0.0/24"
+    controller_public_ip: "192.168.50.85"
+    controller_vpn_ip: "10.0.0.1"
+    controller_public_key: "{{ hostvars['server1'].wg_public_key if 'server1' in hostvars else controller_public_key }}"
+
+  tasks:
+    - name: 确保 Python3 和 pip 已安装
+      apt:
+        name: 
+          - python3
+          - python3-pip
+        state: present
+        update_cache: true
+      ignore_errors: true
+
+    - name: 安装 WireGuard
+      apt:
+        name: wireguard
+        state: present
+        update_cache: true
+
+    - name: 删除现有私钥（如果存在且内容无效）
+      file:
+        path: /etc/wireguard/private.key
+        state: absent
+      when: ansible_check_mode is not defined
+      ignore_errors: true
+
+    - name: 生成 WireGuard 私钥
+      shell: wg genkey
+      register: private_key_result
+      when: not ansible_check_mode
+
+    - name: 保存私钥
+      copy:
+        content: "{{ private_key_result.stdout }}"
+        dest: /etc/wireguard/private.key
+        mode: '0600'
+      when: private_key_result is defined and private_key_result.stdout is defined
+
+    - name: 生成公钥
+      shell: "cat /etc/wireguard/private.key | wg pubkey"
+      register: public_key_result
+
+    - name: 设置主机变量
+      set_fact:
+        wg_private_key: "{{ private_key_result.stdout if private_key_result is defined else lookup('file', '/etc/wireguard/private.key') }}"
+        wg_public_key: "{{ public_key_result.stdout }}"
+        is_controller: false
+
+    - name: 配置 WireGuard
+      template:
+        src: "{{ playbook_dir }}/../templates/vpn/wg0.conf.j2"
+        dest: /etc/wireguard/wg0.conf
+        mode: '0600'
+      vars:
+        controller_public_key: "{{ controller_public_key }}"
+        controller_public_ip: "{{ controller_public_ip }}"
+        controller_ip: "{{ controller_ip }}"
+        vpn_cidr: "{{ vpn_cidr }}"
+        wireguard_port: "{{ wireguard_port }}"
+        is_controller: false
+
+    - name: 启用 IP 转发
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: true
+        state: present
+        reload: true
+
+    - name: 检查 WireGuard 配置
+      command: wg-quick strip wg0
+      register: wg_config_check
+      ignore_errors: true
+
+    - name: 显示 WireGuard 配置检查结果
+      debug:
+        var: wg_config_check
+      when: wg_config_check.rc != 0
+
+    - name: 检查系统日志
+      command: journalctl -u wg-quick@wg0.service -n 50 --no-pager
+      register: wg_logs
+      ignore_errors: true
+      when: wg_config_check.rc != 0
+
+    - name: 显示系统日志
+      debug:
+        var: wg_logs
+      when: wg_config_check.rc != 0
+
+    - name: 启动 WireGuard
+      systemd:
+        name: wg-quick@wg0
+        state: restarted
+        enabled: true
+      register: wg_service
+
+    - name: 显示 WireGuard 状态
+      command: wg show
+      register: wg_status
+      when: wg_service is success
+
+    - name: 显示 WireGuard 接口状态
+      command: ip addr show wg0
+      register: wg_interface
+      ignore_errors: true
+      when: wg_service is success
+
+    - name: 显示 WireGuard 路由
+      command: ip route show
+      register: wg_routes
+      ignore_errors: true
+      when: wg_service is success
+
+    - name: 显示调试信息
+      debug:
+        msg: 
+          - "WireGuard 状态: {{ wg_status.stdout if wg_status.stdout is defined else 'N/A' }}"
+          - "接口状态: {{ wg_interface.stdout if wg_interface.stdout is defined else 'N/A' }}"
+          - "路由信息: {{ wg_routes.stdout if wg_routes.stdout is defined else 'N/A' }}"
+      when: wg_service is success

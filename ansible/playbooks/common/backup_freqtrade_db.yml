@@ -1,0 +1,51 @@
+---
+- name: 备份 Freqtrade 数据库
+  hosts: all
+  gather_facts: true
+  become: true
+
+  vars:
+    temp_dir: "/tmp/freqtrade_backup"
+    backup_dir: "{{ lookup('env', 'HOME') }}/freqtrade_backups/{{ ansible_host }}/db_backup"
+
+  tasks:
+    - name: 确保服务器临时目录存在
+      file:
+        path: "{{ temp_dir }}"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: 获取容器中的数据库文件列表
+      shell: docker exec freqtrade find /freqtrade/ -name "*.sqlite*" | sort -u
+      register: db_files
+      ignore_errors: true
+
+    - name: 从 Docker 容器复制数据库文件到临时目录
+      shell: "docker cp freqtrade:{{ item }} {{ temp_dir }}/{{ item | basename }}"
+      with_items: "{{ db_files.stdout_lines }}"
+      when: db_files.stdout_lines is defined and db_files.stdout_lines | length > 0
+      ignore_errors: true
+
+    - name: 从服务器获取数据库文件
+      fetch:
+        src: "{{ temp_dir }}/{{ item | basename }}"
+        dest: "{{ backup_dir }}/"
+        flat: yes
+      with_items: "{{ db_files.stdout_lines }}"
+      when: db_files.stdout_lines is defined and db_files.stdout_lines | length > 0
+
+    - name: 清理临时目录
+      file:
+        path: "{{ temp_dir }}"
+        state: absent
+
+    - name: 显示备份信息
+      debug:
+        msg: |
+          数据库文件已备份到 {{ backup_dir }}
+          找到的文件:
+          {% for file in db_files.stdout_lines %}
+          - {{ file | basename }}
+          {% endfor %} 

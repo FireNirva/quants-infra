@@ -1,0 +1,34 @@
+# 默认安全规则配置
+# 适用于基础实例，不运行特定服务
+
+# SSH 端口（自定义）
+ssh_port: 6677
+
+# WireGuard VPN 端口
+wireguard_port: 51820
+
+# VPN 网络
+vpn_network: "10.0.0.0/24"
+
+# 是否记录被拒绝的流量（调试用，生产环境建议关闭）
+log_dropped: false
+
+# 公开访问的端口（从 Internet 可访问）
+public_ports: []
+  # - port: 80
+  #   proto: tcp
+  #   comment: "HTTP"
+  # - port: 443
+  #   proto: tcp
+  #   comment: "HTTPS"
+
+# 仅限 VPN 网络访问的端口
+vpn_only_ports: []
+  # 示例：
+  # - port: 9100
+  #   proto: tcp
+  #   comment: "Node Exporter"
+
+# 动态服务端口（通过 adjust_firewall_for_service 添加）
+service_ports: []
+

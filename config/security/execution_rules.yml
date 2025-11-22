@@ -1,0 +1,69 @@
+# 执行引擎安全规则配置
+# 适用于运行交易执行引擎（Freqtrade/Hummingbot）的实例
+
+# SSH 端口（自定义）
+ssh_port: 6677
+
+# WireGuard VPN 端口
+wireguard_port: 51820
+
+# VPN 网络
+vpn_network: "10.0.0.0/24"
+
+# 是否记录被拒绝的流量
+log_dropped: false
+
+# 公开访问的端口（执行引擎通常不公开暴露）
+public_ports: []
+  # 如果需要从 Internet 访问 Freqtrade API，可以添加（不推荐）：
+  # - port: 8080
+  #   proto: tcp
+  #   comment: "Freqtrade API (HTTPS + Auth required)"
+
+# 仅限 VPN 网络访问的端口
+vpn_only_ports:
+  # Freqtrade API/WebUI
+  - port: 8080
+    proto: tcp
+    comment: "Freqtrade API"
+  
+  # Hummingbot API（如果使用）
+  - port: 5000
+    proto: tcp
+    comment: "Hummingbot API"
+  
+  # Node Exporter - 系统指标
+  - port: 9100
+    proto: tcp
+    comment: "Node Exporter"
+  
+  # 自定义执行引擎状态 API
+  - port: 8888
+    proto: tcp
+    comment: "Custom Execution Status API"
+
+# 动态服务端口
+service_ports: []
+
+# 执行引擎特定配置
+execution_config:
+  # 允许的 CEX 交易所 API 端点（出站规则）
+  allowed_exchanges:
+    - "api.gateio.ws"
+    - "api.binance.com"
+    - "api.mexc.com"
+    - "api.kucoin.com"
+  
+  # 允许的 DEX RPC 节点（出站规则）
+  allowed_dex_rpc:
+    - "mainnet.base.org"
+    - "bsc-dataseed.binance.org"
+    - "rpc.ankr.com"
+  
+  # 最大并发连接数（限流）
+  max_connections: 100
+  
+  # API 访问控制
+  api_auth_required: true
+  api_rate_limit: "100/hour"
+

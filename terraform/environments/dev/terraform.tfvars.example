@@ -1,0 +1,13 @@
+# Development Environment - Example Configuration
+# 复制此文件为 terraform.tfvars 并修改以下值
+
+region         = "ap-northeast-1"
+aws_profile    = "default"
+key_pair_name  = "my-lightsail-key"  # 替换为你的密钥对名称
+
+# 限制 SSH 访问（可选）
+# ssh_allowed_cidrs = [
+#   "203.0.113.0/24",  # 你的办公室 IP
+#   "198.51.100.0/24"  # 你的家庭 IP
+# ]
+

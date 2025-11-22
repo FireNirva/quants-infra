@@ -1,0 +1,43 @@
+---
+- name: 停止并清理 WireGuard VPN
+  hosts: all
+  become: true
+  tasks:
+    - name: 停止 WireGuard 服务
+      systemd:
+        name: wg-quick@wg0
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: 删除 WireGuard 配置文件
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /etc/wireguard/wg0.conf
+        - /etc/wireguard/private.key
+        - /etc/wireguard/public.key
+      ignore_errors: true
+
+    - name: 删除 WireGuard 接口
+      command: ip link delete wg0
+      ignore_errors: true
+
+    - name: 禁用 IP 转发
+      sysctl:
+        name: "{{ item }}"
+        value: '0'
+        state: present
+        reload: yes
+      with_items:
+        - net.ipv4.ip_forward
+        - net.ipv4.conf.all.forwarding
+      ignore_errors: true
+
+    - name: 清理系统日志
+      shell: |
+        journalctl --vacuum-time=1s
+        journalctl --rotate
+        systemctl restart systemd-journald
+      ignore_errors: true 

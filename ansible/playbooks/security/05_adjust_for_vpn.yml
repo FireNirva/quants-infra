@@ -1,0 +1,122 @@
+---
+- name: VPN 部署后调整防火墙
+  hosts: all
+  become: true
+  become_method: sudo
+  
+  vars:
+    iptables_rules_file: /etc/iptables/rules.v4
+    backup_dir: /etc/quants-security/backups
+    
+  tasks:
+    - name: 显示 VPN 配置信息
+      debug:
+        msg: |
+          配置主机: {{ ansible_host }}
+          VPN 端口: {{ wireguard_port }}
+          VPN 网络: {{ vpn_network }}
+    
+    - name: 检查 WireGuard 是否已安装
+      command: which wg
+      register: wg_check
+      failed_when: false
+      changed_when: false
+    
+    - name: 验证 WireGuard 安装
+      assert:
+        that:
+          - wg_check.rc == 0
+        fail_msg: "WireGuard 未安装，请先安装 WireGuard"
+        success_msg: "WireGuard 已安装"
+    
+    - name: 备份当前防火墙规则
+      copy:
+        src: "{{ iptables_rules_file }}"
+        dest: "{{ backup_dir }}/rules.v4.before_vpn.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        mode: '0644'
+    
+    - name: 更新系统安全参数（启用 IP 转发）
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        sysctl_set: yes
+        reload: yes
+    
+    - name: 重新生成防火墙规则（启用 VPN）
+      template:
+        src: ../../templates/security/iptables_rules.j2
+        dest: "{{ iptables_rules_file }}"
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        vpn_enabled: true
+      register: rules_updated
+    
+    - name: 应用新的防火墙规则
+      command: iptables-restore "{{ iptables_rules_file }}"
+      when: rules_updated.changed
+    
+    - name: 保存防火墙规则
+      command: netfilter-persistent save
+      when: rules_updated.changed
+    
+    - name: 验证 VPN 端口已开放
+      shell: |
+        if iptables -L INPUT -n | grep -q "udp dpt:{{ wireguard_port }}"; then
+          echo "VPN port opened"
+          exit 0
+        else
+          echo "VPN port not found"
+          exit 1
+        fi
+      register: vpn_port_check
+      changed_when: false
+    
+    - name: 验证 VPN 接口规则
+      shell: |
+        if iptables -L INPUT -n | grep -q "wg0"; then
+          echo "VPN interface rules configured"
+          exit 0
+        else
+          echo "VPN interface rules not found"
+          exit 1
+        fi
+      register: vpn_interface_check
+      changed_when: false
+    
+    - name: 检查 WireGuard 接口状态
+      command: wg show
+      register: wg_status
+      changed_when: false
+      failed_when: false
+    
+    - name: 显示 WireGuard 状态
+      debug:
+        var: wg_status.stdout_lines
+      when: wg_status.rc == 0
+    
+    - name: 创建 VPN 防火墙调整完成标记
+      copy:
+        dest: /etc/quants-security/vpn_firewall_adjusted
+        content: |
+          调整时间: {{ ansible_date_time.iso8601 }}
+          VPN 端口: {{ wireguard_port }}
+          VPN 网络: {{ vpn_network }}
+          IP 转发: 已启用
+        mode: '0644'
+    
+    - name: 显示完成信息
+      debug:
+        msg: |
+          ✓ VPN 防火墙调整完成
+          ✓ VPN 端口已开放: {{ wireguard_port }}/udp
+          ✓ VPN 接口规则已配置
+          ✓ IP 转发已启用
+          
+          验证命令:
+          - 查看 WireGuard 状态: wg show
+          - 查看防火墙规则: iptables -L -v -n
+

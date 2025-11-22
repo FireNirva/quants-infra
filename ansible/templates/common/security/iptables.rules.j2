@@ -1,0 +1,36 @@
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+
+# 允许已建立和相关的连接
+-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# 允许本地回环接口
+-A INPUT -i lo -j ACCEPT
+
+# 允许 ICMP ping
+-A INPUT -p icmp --icmp-type echo-request -j ACCEPT
+
+# 允许 SSH
+-A INPUT -p tcp --dport {{ ssh_port }} -j ACCEPT -m comment --comment "SSH"
+
+# 允许公开访问的端口
+{% for item in public_ports %}
+-A INPUT -p {{ item.proto }} --dport {{ item.port }} -j ACCEPT -m comment --comment "{{ item.comment }}"
+{% endfor %}
+
+# 允许仅限 VPN 访问的端口
+{% for item in vpn_only_ports %}
+-A INPUT -p {{ item.proto }} -s 10.0.0.0/24 --dport {{ item.port }} -j ACCEPT -m comment --comment "{{ item.comment }}"
+{% endfor %}
+
+# 允许 VPN 接口流量
+-A INPUT -i wg0 -j ACCEPT
+-A OUTPUT -o wg0 -j ACCEPT
+
+# 允许外部 API 访问
+-A OUTPUT -p tcp --dport 80 -j ACCEPT -m comment --comment "HTTP"
+-A OUTPUT -p tcp --dport 443 -j ACCEPT -m comment --comment "HTTPS"
+
+COMMIT

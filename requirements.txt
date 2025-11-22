@@ -1,0 +1,18 @@
+click>=8.0
+ansible-runner>=2.3
+docker>=6.0
+boto3>=1.26
+paramiko>=3.0
+jinja2>=3.1
+pyyaml>=6.0
+tabulate>=0.9
+colorama>=0.4
+python-dotenv>=1.0
+
+# Development dependencies
+pytest>=7.0
+pytest-cov>=4.0
+black>=23.0
+flake8>=6.0
+mypy>=1.0
+

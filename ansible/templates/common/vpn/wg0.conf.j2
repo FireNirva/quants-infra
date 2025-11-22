@@ -1,0 +1,20 @@
+[Interface]
+Address = {{ hostvars[inventory_hostname].vpn_ip }}/24
+PrivateKey = {{ wg_private_key }}
+ListenPort = {{ wireguard_port }}
+
+# 控制端节点
+[Peer]
+PublicKey = {{ controller_public_key }}
+AllowedIPs = {{ vpn_cidr }}
+Endpoint = {{ controller_public_ip }}:{{ wireguard_port }}
+PersistentKeepalive = 25
+
+{% for host in groups['all'] %}
+{% if hostvars[inventory_hostname].vpn_ip != hostvars[host].vpn_ip and hostvars[host].vpn_ip != controller_ip %}
+# {{ hostvars[host].vpn_ip }} 节点
+[Peer]
+PublicKey = {{ hostvars[host].wg_public_key }}
+AllowedIPs = {{ hostvars[host].vpn_ip }}/32
+{% endif %}
+{% endfor %} 

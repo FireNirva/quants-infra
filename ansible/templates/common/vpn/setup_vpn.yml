@@ -1,0 +1,28 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: 安装 WireGuard
+      apt:
+        name: wireguard
+        state: present
+        update_cache: yes
+
+    - name: 配置 WireGuard
+      template:
+        src: wg0.conf.j2
+        dest: /etc/wireguard/wg0.conf
+        mode: '0600'
+
+    - name: 启用 IP 转发
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: yes
+        state: present
+
+    - name: 启动 WireGuard
+      service:
+        name: wg-quick@wg0
+        state: started
+        enabled: yes 

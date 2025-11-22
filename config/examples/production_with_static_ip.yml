@@ -1,0 +1,68 @@
+# 生产环境实例配置（带静态 IP）
+#
+# 使用方法:
+# python -c "
+# from providers.aws.lightsail_manager import LightsailManager
+# import yaml
+# with open('config/examples/production_with_static_ip.yml') as f:
+#     config = yaml.safe_load(f)
+# manager = LightsailManager({'provider': 'aws', 'region': 'us-east-1'})
+# instance = manager.create_instance(config)
+# print(f'静态 IP: {instance[\"public_ip\"]}')
+# "
+
+# ===== 基本配置 =====
+name: my-trading-bot          # 实例名称
+bundle_id: nano_3_0            # 实例规格（nano=2vCPU/0.5GB，最便宜）
+blueprint_id: ubuntu_22_04     # 操作系统
+availability_zone: us-east-1a  # 可用区
+region: us-east-1              # AWS 区域
+
+# ===== 静态 IP 配置 ⭐ =====
+use_static_ip: true                      # 启用静态 IP
+static_ip_name: my-trading-bot-static-ip # 静态 IP 名称（可选）
+
+# ===== 标签 =====
+tags:
+  - key: Environment
+    value: production
+  - key: Purpose
+    value: trading
+  - key: Owner
+    value: quants-team
+  - key: CostCenter
+    value: trading-infrastructure
+
+# ===== 其他可选配置 =====
+# user_data: |
+#   #!/bin/bash
+#   apt-get update
+#   apt-get install -y docker.io
+#
+# key_pair_name: my-ssh-keypair  # SSH 密钥对名称
+
+# ===== 说明 =====
+#
+# 实例规格选项:
+# - nano_3_0:   2 vCPU, 0.5 GB RAM, 20 GB SSD  (~$3.5/月)
+# - micro_3_0:  2 vCPU, 1 GB RAM,   40 GB SSD  (~$5/月)
+# - small_3_0:  2 vCPU, 2 GB RAM,   60 GB SSD  (~$10/月)
+# - medium_3_0: 2 vCPU, 4 GB RAM,   80 GB SSD  (~$20/月)
+# - large_3_0:  2 vCPU, 8 GB RAM,   160 GB SSD (~$40/月)
+#
+# 操作系统选项:
+# - ubuntu_22_04: Ubuntu 22.04 LTS
+# - ubuntu_20_04: Ubuntu 20.04 LTS
+# - amazon_linux_2: Amazon Linux 2
+#
+# 静态 IP 说明:
+# - use_static_ip: true  启用后，IP 地址永久不变
+# - 停止/启动/重启实例，IP 都保持不变
+# - 删除实例时，静态 IP 会自动释放
+# - 静态 IP 附加到实例时免费
+#
+# 成本估算:
+# - nano_3_0 实例: $3.5/月
+# - 静态 IP（附加状态）: $0/月
+# - 总计: ~$3.5/月
+

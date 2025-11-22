@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  grafana:
+    image: grafana/grafana:{{ grafana_version | default('latest') }}
+    container_name: grafana
+    command:
+      - '--homepath=/usr/share/grafana'
+    network_mode: host
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password | default('admin') }}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+
+volumes:
+  grafana_data:

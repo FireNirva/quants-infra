@@ -1,0 +1,87 @@
+---
+- name: 停止 Freqtrade
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: true
+
+  tasks:
+    - name: 检查 Docker 是否安装
+      command: docker --version
+      register: docker_check
+      ignore_errors: true
+
+    - name: 检查 Docker Compose 是否安装
+      command: docker compose version
+      register: compose_check
+      ignore_errors: true
+
+    - name: 获取 Freqtrade 容器状态
+      shell: "docker ps -a | grep freqtrade || true"
+      register: container_check
+      changed_when: false
+
+    - name: 停止 Freqtrade 容器
+      command: "docker stop freqtrade"
+      when: "container_check.stdout != ''"
+      ignore_errors: true
+
+    - name: 删除 Freqtrade 容器
+      command: "docker rm freqtrade"
+      when: "container_check.stdout != ''"
+      ignore_errors: true
+
+    - name: 清理 Freqtrade 工作目录
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "/tmp/freqtrade"
+        - "~/freqtrade"
+      ignore_errors: true
+
+    - name: 获取 Docker 卷列表
+      shell: "docker volume ls | grep freqtrade || true"
+      register: volume_check
+      changed_when: false
+
+    - name: 清理 Docker 卷
+      command: "docker volume rm {{ item.split(' ')[1] }}"
+      when: "volume_check.stdout != ''"
+      with_items: "{{ volume_check.stdout_lines }}"
+      ignore_errors: true
+
+    - name: 获取 Freqtrade 网络列表
+      shell: "docker network ls --format '{% raw %}{{ .Name }}{% endraw %}' | grep freqtrade || true"
+      register: network_check
+      changed_when: false
+
+    - name: 清理 Freqtrade 网络
+      command: "docker network rm freqtrade_default"
+      when: "'freqtrade_default' in network_check.stdout"
+      ignore_errors: true
+
+    - name: 检查 Freqtrade 进程
+      shell: "ps aux | grep freqtrade | grep -v grep || true"
+      register: process_check
+      changed_when: false
+
+    - name: 强制结束遗留的 Freqtrade 进程
+      shell: "pkill -f freqtrade || true"
+      when: "process_check.stdout != ''"
+      ignore_errors: true
+
+    - name: 验证 Freqtrade 是否仍在运行
+      shell: "docker ps | grep freqtrade || true"
+      register: final_check
+      changed_when: false
+
+    - name: 显示停止状态
+      debug:
+        msg: "Freqtrade 已成功停止"
+      when: "final_check.stdout == ''"
+
+    - name: 显示警告
+      debug:
+        msg: "警告：仍有 Freqtrade 相关容器在运行：{{ final_check.stdout }}"
+      when: "final_check.stdout != ''" 

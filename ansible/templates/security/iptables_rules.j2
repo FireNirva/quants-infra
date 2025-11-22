@@ -1,0 +1,111 @@
+{# iptables 防火墙规则模板 - 白名单策略 #}
+{# 默认拒绝所有入站流量，仅允许明确授权的连接 #}
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+
+# ============================================
+# 基础规则
+# ============================================
+
+# 允许已建立和相关的连接
+-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# 允许本地回环接口
+-A INPUT -i lo -j ACCEPT
+
+# 允许 ICMP ping（可选限流）
+-A INPUT -p icmp --icmp-type echo-request -m limit --limit 5/sec -j ACCEPT
+
+# ============================================
+# SSH 访问（带暴力破解防护）
+# ============================================
+
+# SSH brute-force 防护：60秒内最多4次连接尝试
+-A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -m state --state NEW -m recent --set --name SSH
+-A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -m state --state NEW -m recent --update --seconds 60 --hitcount 4 --name SSH -j LOG --log-prefix "SSH-brute-force: " --log-level 4
+-A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -m state --state NEW -m recent --update --seconds 60 --hitcount 4 --name SSH -j DROP
+-A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -j ACCEPT -m comment --comment "SSH"
+
+# ============================================
+# WireGuard VPN 端口
+# ============================================
+
+{% if wireguard_port is defined %}
+# 允许 WireGuard VPN 连接
+-A INPUT -p udp --dport {{ wireguard_port }} -j ACCEPT -m comment --comment "WireGuard VPN"
+
+# 允许 VPN 接口所有流量
+-A INPUT -i wg0 -j ACCEPT
+-A OUTPUT -o wg0 -j ACCEPT
+-A FORWARD -i wg0 -j ACCEPT
+-A FORWARD -o wg0 -j ACCEPT
+{% endif %}
+
+# ============================================
+# 公开端口（Internet 可访问）
+# ============================================
+
+{% if public_ports is defined and public_ports|length > 0 %}
+# 公开访问的服务端口
+{% for port in public_ports %}
+-A INPUT -p {{ port.proto | default('tcp') }} --dport {{ port.port }} -j ACCEPT -m comment --comment "{{ port.comment | default('Public Service') }}"
+{% endfor %}
+{% endif %}
+
+# ============================================
+# VPN 专用端口（仅限 VPN 网络访问）
+# ============================================
+
+{% if vpn_only_ports is defined and vpn_only_ports|length > 0 %}
+# 仅限 VPN 网络访问的服务端口
+{% for port in vpn_only_ports %}
+-A INPUT -p {{ port.proto | default('tcp') }} -s {{ vpn_network | default('10.0.0.0/24') }} --dport {{ port.port }} -j ACCEPT -m comment --comment "{{ port.comment | default('VPN Service') }}"
+{% endfor %}
+{% endif %}
+
+# ============================================
+# 服务特定端口（动态添加）
+# ============================================
+
+{% if service_ports is defined and service_ports|length > 0 %}
+# 服务特定端口规则
+{% for port in service_ports %}
+{% if port.source is defined %}
+-A INPUT -p {{ port.proto | default('tcp') }} -s {{ port.source }} --dport {{ port.port }} -j ACCEPT -m comment --comment "{{ port.comment | default('Service Port') }}"
+{% else %}
+-A INPUT -p {{ port.proto | default('tcp') }} --dport {{ port.port }} -j ACCEPT -m comment --comment "{{ port.comment | default('Service Port') }}"
+{% endif %}
+{% endfor %}
+{% endif %}
+
+# ============================================
+# 出站规则（允许常用服务）
+# ============================================
+
+# 允许 DNS 查询
+-A OUTPUT -p udp --dport 53 -j ACCEPT -m comment --comment "DNS"
+-A OUTPUT -p tcp --dport 53 -j ACCEPT -m comment --comment "DNS TCP"
+
+# 允许 HTTP/HTTPS（用于 API 访问和更新）
+-A OUTPUT -p tcp --dport 80 -j ACCEPT -m comment --comment "HTTP"
+-A OUTPUT -p tcp --dport 443 -j ACCEPT -m comment --comment "HTTPS"
+
+# 允许 NTP（时间同步）
+-A OUTPUT -p udp --dport 123 -j ACCEPT -m comment --comment "NTP"
+
+# ============================================
+# 日志和拒绝规则
+# ============================================
+
+{% if log_dropped is defined and log_dropped %}
+# 记录被拒绝的入站流量（用于调试，生产环境建议关闭）
+-A INPUT -m limit --limit 3/min -j LOG --log-prefix "IPT-INPUT-DROP: " --log-level 4
+-A FORWARD -m limit --limit 3/min -j LOG --log-prefix "IPT-FORWARD-DROP: " --log-level 4
+{% endif %}
+
+# 拒绝其他所有入站和转发流量（默认策略已设置为 DROP）
+
+COMMIT
+

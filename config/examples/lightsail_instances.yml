@@ -1,0 +1,119 @@
+# Lightsail Instances Configuration
+# 用于手动定义实例配置和生成 Ansible inventory
+
+instances:
+  # 数据采集器 1
+  - name: quant-collector-1
+    type: data-collector
+    public_ip: 54.123.45.67
+    private_ip: 172.26.1.10
+    username: ubuntu
+    ssh_port: 22
+    bundle: small_3_0
+    region: ap-northeast-1
+    availability_zone: ap-northeast-1a
+    tags:
+      Environment: prod
+      Service: data-collector
+      Team: Quant
+    services:
+      - data-collector
+      - node-exporter
+  
+  # 数据采集器 2（冗余）
+  - name: quant-collector-2
+    type: data-collector
+    public_ip: 54.123.45.68
+    private_ip: 172.26.1.11
+    username: ubuntu
+    ssh_port: 22
+    bundle: small_3_0
+    region: ap-northeast-1
+    availability_zone: ap-northeast-1b
+    tags:
+      Environment: prod
+      Service: data-collector
+      Team: Quant
+    services:
+      - data-collector
+      - node-exporter
+  
+  # 执行引擎实例
+  - name: quant-exec-1
+    type: execution
+    public_ip: 54.123.45.69
+    private_ip: 172.26.1.20
+    username: ubuntu
+    ssh_port: 22
+    bundle: medium_3_0
+    region: ap-northeast-1
+    availability_zone: ap-northeast-1a
+    tags:
+      Environment: prod
+      Service: execution
+      Team: Quant
+      CriticalLevel: high
+    services:
+      - freqtrade
+      - node-exporter
+  
+  # 监控实例
+  - name: quant-monitor
+    type: monitor
+    public_ip: 54.123.45.70
+    private_ip: 172.26.1.30
+    username: ubuntu
+    ssh_port: 22
+    bundle: medium_3_0
+    region: ap-northeast-1
+    availability_zone: ap-northeast-1a
+    static_ip: true
+    tags:
+      Environment: prod
+      Service: monitor
+      Team: Quant
+      CriticalLevel: critical
+    services:
+      - prometheus
+      - grafana
+      - alertmanager
+      - node-exporter
+
+# 全局变量
+global_vars:
+  ansible_python_interpreter: /usr/bin/python3
+  ansible_become: true
+  ansible_become_method: sudo
+  
+  # WireGuard VPN 配置
+  vpn_network: 10.0.0.0/24
+  vpn_port: 51820
+  
+  # 监控配置
+  prometheus_retention: 30d
+  grafana_admin_password: "{{ vault_grafana_password }}"
+  
+  # SSH 配置
+  ssh_port: 22
+  ssh_key_path: ~/.ssh/lightsail-key.pem
+
+# 环境特定配置
+environments:
+  dev:
+    log_level: DEBUG
+    monitoring_enabled: true
+    backup_enabled: false
+  
+  staging:
+    log_level: INFO
+    monitoring_enabled: true
+    backup_enabled: true
+    backup_schedule: daily
+  
+  prod:
+    log_level: WARNING
+    monitoring_enabled: true
+    backup_enabled: true
+    backup_schedule: hourly
+    alerting_enabled: true
+

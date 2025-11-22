@@ -1,0 +1,42 @@
+{
+    "max_open_trades": {{ max_open_trades | default(3) }},
+    "stake_currency": "{{ stake_currency | default('USDT') }}",
+    "stake_amount": "{{ stake_amount | default('unlimited') }}",
+    "tradable_balance_ratio": {{ tradable_balance_ratio | default(0.99) }},
+    "fiat_display_currency": "{{ fiat_display_currency | default('USD') }}",
+    "dry_run": {{ dry_run | default(true) | lower }},
+    "timeframe": "{{ timeframe | default('5m') }}",
+    "exchange": {
+        "name": "{{ exchange_name | default('binance') }}",
+        "key": "{{ exchange_key | default('') }}",
+        "secret": "{{ exchange_secret | default('') }}",
+        "ccxt_config": {},
+        "ccxt_async_config": {}
+    },
+    "bot_name": "{{ bot_name | default('freqtrade_bot') }}",
+    "strategy": "{{ strategy | default('SampleStrategy') }}",
+    "order_types": {
+        "entry": "limit",
+        "exit": "limit",
+        "emergency_exit": "market",
+        "force_exit": "market",
+        "force_entry": "market",
+        "stoploss": "market",
+        "stoploss_on_exchange": false
+    },
+    "unfilledtimeout": {
+        "entry": 10,
+        "exit": 10,
+        "exit_timeout_count": 0,
+        "unit": "minutes"
+    },
+    "stoploss": -0.10,
+    "minimal_roi": {
+        "60":  0.01,
+        "30":  0.02,
+        "0":  0.04
+    },
+    "internals": {
+        "process_throttle_secs": 5
+    }
+} 

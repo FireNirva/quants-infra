@@ -1,0 +1,85 @@
+---
+- name: 安装和配置 Node Exporter
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: true
+
+  vars:
+    node_exporter_version: "1.7.0"
+    node_exporter_arch: "linux-amd64"
+    node_exporter_download_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.{{ node_exporter_arch }}.tar.gz"
+
+  tasks:
+    - name: 创建 node_exporter 用户
+      user:
+        name: node_exporter
+        system: yes
+        shell: /bin/false
+        create_home: no
+
+    - name: 下载 Node Exporter
+      get_url:
+        url: "{{ node_exporter_download_url }}"
+        dest: "/tmp/node_exporter.tar.gz"
+        mode: '0644'
+        force: yes
+      register: download_result
+      retries: 3
+      delay: 5
+      until: download_result is success
+
+    - name: 创建安装目录
+      file:
+        path: "/usr/local/bin"
+        state: directory
+        mode: '0755'
+
+    - name: 解压 Node Exporter
+      unarchive:
+        src: "/tmp/node_exporter.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+        creates: "/tmp/node_exporter-{{ node_exporter_version }}.{{ node_exporter_arch }}"
+
+    - name: 安装 Node Exporter 二进制文件
+      copy:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.{{ node_exporter_arch }}/node_exporter"
+        dest: "/usr/local/bin/node_exporter"
+        mode: '0755'
+        remote_src: yes
+        owner: node_exporter
+        group: node_exporter
+
+    - name: 创建 Node Exporter systemd 服务
+      template:
+        src: "{{ playbook_dir }}/../templates/monitor/node_exporter.service.j2"
+        dest: "/etc/systemd/system/node_exporter.service"
+        mode: '0644'
+
+    - name: 启动并启用 Node Exporter 服务
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: 等待 Node Exporter 启动
+      wait_for:
+        port: 9100
+        timeout: 60
+
+    - name: 检查 Node Exporter 是否运行
+      uri:
+        url: "http://localhost:9100/metrics"
+        return_content: yes
+      register: node_exporter_metrics
+      failed_when: "'node_' not in node_exporter_metrics.content"
+
+    - name: 清理临时文件
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "/tmp/node_exporter.tar.gz"
+        - "/tmp/node_exporter-{{ node_exporter_version }}.{{ node_exporter_arch }}" 

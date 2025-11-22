@@ -1,0 +1,67 @@
+{
+  "dashboard": {
+    "title": "Data Collection Monitoring",
+    "tags": ["data-collection", "quants"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "Collection Rate (records/sec)",
+        "targets": [
+          {
+            "expr": "rate(data_collector_records_total[5m])",
+            "legendFormat": "{{instance}} - {{exchange}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "title": "Collection Latency (ms)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(data_collector_latency_bucket[5m]))",
+            "legendFormat": "P95 - {{instance}}"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(data_collector_latency_bucket[5m]))",
+            "legendFormat": "P99 - {{instance}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "type": "graph",
+        "title": "Error Rate",
+        "targets": [
+          {
+            "expr": "rate(data_collector_errors_total[5m])",
+            "legendFormat": "{{instance}} - {{error_type}}"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "type": "stat",
+        "title": "Active Collectors",
+        "targets": [
+          {
+            "expr": "count(up{job=\"data-collector\"} == 1)"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  },
+  "overwrite": true
+}
+

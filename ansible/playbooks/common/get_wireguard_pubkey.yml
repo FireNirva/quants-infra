@@ -1,0 +1,20 @@
+---
+- name: 获取 WireGuard 公钥
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: false
+  
+  tasks:
+    - name: 获取 WireGuard 私钥
+      slurp:
+        src: /etc/wireguard/private.key
+      register: private_key_content
+      
+    - name: 生成公钥
+      shell: "echo '{{ private_key_content.content | b64decode }}' | wg pubkey"
+      register: public_key_result
+      
+    - name: 保存公钥到主机变量
+      set_fact:
+        wg_public_key: "{{ public_key_result.stdout }}" 

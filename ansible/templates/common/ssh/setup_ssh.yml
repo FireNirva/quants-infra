@@ -1,0 +1,26 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: 安装 OpenSSH 服务器
+      apt:
+        name: openssh-server
+        state: present
+        update_cache: yes
+
+    - name: 配置 SSH 端口
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?Port '
+        line: "Port {{ ssh_port }}"
+
+    - name: 配置 SSH 密钥认证
+      copy:
+        src: "{{ ssh_key_path }}"
+        dest: "~/.ssh/authorized_keys"
+        mode: '0600'
+        
+    - name: 重启 SSH 服务
+      service:
+        name: ssh
+        state: restarted 

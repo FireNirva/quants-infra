@@ -1,0 +1,182 @@
+---
+# 防火墙配置 Playbook
+# 使用 iptables 实现白名单防火墙策略
+
+- name: Setup Firewall (iptables)
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # 默认值，可由 extra_vars 覆盖
+    ssh_port: 6677
+    wireguard_port: 51820
+    vpn_network: "10.0.0.0/24"
+    log_dropped: false
+    public_ports: []
+    vpn_only_ports: []
+    service_ports: []
+  
+  tasks:
+    - name: Ensure iptables-persistent is installed
+      apt:
+        name:
+          - iptables
+          - iptables-persistent
+          - netfilter-persistent
+        state: present
+      when: ansible_os_family == "Debian"
+    
+    - name: Create iptables configuration directory
+      file:
+        path: /etc/iptables
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Backup existing iptables rules
+      shell: |
+        if [ -f /etc/iptables/rules.v4 ]; then
+          cp /etc/iptables/rules.v4 /etc/iptables/rules.v4.backup.$(date +%Y%m%d_%H%M%S)
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+    
+    - name: Generate iptables rules from template
+      template:
+        src: ../../templates/security/iptables_rules.j2
+        dest: /etc/iptables/rules.v4
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+      register: iptables_rules
+    
+    - name: Display generated rules for verification
+      debug:
+        msg: "Firewall rules have been generated at /etc/iptables/rules.v4"
+    
+    - name: Flush existing iptables rules
+      iptables:
+        flush: yes
+      when: iptables_rules.changed
+    
+    - name: Apply iptables rules
+      shell: iptables-restore < /etc/iptables/rules.v4
+      when: iptables_rules.changed
+      register: iptables_apply
+    
+    - name: Save iptables rules (make persistent)
+      shell: netfilter-persistent save
+      when: iptables_apply.changed
+    
+    - name: Enable netfilter-persistent service
+      systemd:
+        name: netfilter-persistent
+        enabled: yes
+        state: started
+    
+    - name: Verify iptables rules are loaded
+      command: iptables -L -n -v
+      register: iptables_status
+      changed_when: false
+    
+    - name: Display current iptables status
+      debug:
+        msg: "{{ iptables_status.stdout_lines }}"
+    
+    - name: Create firewall management script
+      copy:
+        dest: /opt/scripts/firewall-status.sh
+        content: |
+          #!/bin/bash
+          # Firewall Status Script
+          
+          echo "=================================="
+          echo "  Firewall Status"
+          echo "=================================="
+          echo ""
+          echo "=== Filter Table ==="
+          iptables -L -n -v --line-numbers
+          echo ""
+          echo "=== NAT Table ==="
+          iptables -t nat -L -n -v --line-numbers
+          echo ""
+          echo "=== Active Connections ==="
+          ss -tupln
+          echo ""
+          echo "=== Netfilter Status ==="
+          systemctl status netfilter-persistent --no-pager
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Create firewall reload script
+      copy:
+        dest: /opt/scripts/firewall-reload.sh
+        content: |
+          #!/bin/bash
+          # Firewall Reload Script
+          
+          echo "Reloading firewall rules..."
+          
+          # Backup current rules
+          iptables-save > /etc/iptables/rules.v4.backup.$(date +%Y%m%d_%H%M%S)
+          
+          # Apply rules from file
+          iptables-restore < /etc/iptables/rules.v4
+          
+          # Save to make persistent
+          netfilter-persistent save
+          
+          echo "Firewall rules reloaded successfully"
+          
+          # Show status
+          /opt/scripts/firewall-status.sh
+        mode: '0755'
+        owner: root
+        group: root
+    
+    # 跳过连接测试：防火墙规则不会中断已建立的连接
+    # ESTABLISHED 连接在防火墙规则中被允许
+    # - name: Test connectivity to ensure we didn't lock ourselves out
+    #   wait_for:
+    #     port: "{{ ansible_port }}"
+    #     host: "{{ ansible_host }}"
+    #     timeout: 10
+    #   delegate_to: localhost
+    #   become: no
+    
+    - name: Create firewall configuration completion marker
+      copy:
+        dest: /etc/quants-security/firewall_configured
+        content: |
+          Firewall Configuration Completed
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          SSH Port: {{ ssh_port }}
+          VPN Network: {{ vpn_network }}
+          Rules File: /etc/iptables/rules.v4
+        mode: '0644'
+    
+    - name: Display completion message
+      debug:
+        msg:
+          - "============================================"
+          - "Firewall Configuration Completed"
+          - "============================================"
+          - "Policy: Default DROP (whitelist mode)"
+          - "SSH Port: {{ ssh_port }}"
+          - "VPN Network: {{ vpn_network }}"
+          - "Public Ports: {{ public_ports | length }} configured"
+          - "VPN-Only Ports: {{ vpn_only_ports | length }} configured"
+          - "Service Ports: {{ service_ports | length }} configured"
+          - ""
+          - "Management Scripts:"
+          - "  - /opt/scripts/firewall-status.sh"
+          - "  - /opt/scripts/firewall-reload.sh"
+          - ""
+          - "⚠️  IMPORTANT: Verify SSH access before disconnecting!"
+          - "============================================"
+

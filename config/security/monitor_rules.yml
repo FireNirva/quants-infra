@@ -1,0 +1,67 @@
+# 监控服务安全规则配置
+# 适用于运行 Prometheus、Grafana、Alertmanager 的实例
+
+# SSH 端口（自定义）
+ssh_port: 6677
+
+# WireGuard VPN 端口
+wireguard_port: 51820
+
+# VPN 网络
+vpn_network: "10.0.0.0/24"
+
+# 是否记录被拒绝的流量
+log_dropped: false
+
+# 公开访问的端口（监控服务通常不公开暴露）
+public_ports: []
+  # 如果需要从 Internet 访问 Grafana，可以添加：
+  # - port: 3000
+  #   proto: tcp
+  #   comment: "Grafana (HTTPS recommended)"
+
+# 仅限 VPN 网络访问的端口
+vpn_only_ports:
+  # Prometheus - 指标收集和查询
+  - port: 9090
+    proto: tcp
+    comment: "Prometheus"
+  
+  # Grafana - 可视化仪表板
+  - port: 3000
+    proto: tcp
+    comment: "Grafana"
+  
+  # Alertmanager - 告警管理
+  - port: 9093
+    proto: tcp
+    comment: "Alertmanager"
+  
+  # Alertmanager 集群通信（如果使用集群模式）
+  - port: 9094
+    proto: tcp
+    comment: "Alertmanager Cluster"
+  
+  # Node Exporter - 系统指标
+  - port: 9100
+    proto: tcp
+    comment: "Node Exporter"
+  
+  # Pushgateway（可选）- 批量任务指标推送
+  - port: 9091
+    proto: tcp
+    comment: "Prometheus Pushgateway"
+
+# 动态服务端口
+service_ports: []
+
+# 监控服务特定配置
+monitor_config:
+  # 数据保留时间
+  prometheus_retention: "30d"
+  
+  # 告警通知方式
+  alertmanager_receivers:
+    - telegram
+    - email
+

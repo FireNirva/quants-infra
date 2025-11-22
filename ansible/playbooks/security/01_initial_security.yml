@@ -1,0 +1,181 @@
+---
+# 初始安全配置 Playbook
+# 用于 Lightsail 实例创建后的首次安全设置
+
+- name: Initial Security Setup
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # 默认值，可由 extra_vars 覆盖
+    ssh_port: 6677
+    timezone: "UTC"
+  
+  tasks:
+    - name: Wait for system to be ready
+      wait_for_connection:
+        delay: 5
+        timeout: 300
+      
+    - name: Gather system facts
+      setup:
+    
+    - name: Update APT package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+    
+    # ⚡ 测试优化：跳过系统升级以加快测试速度（节省3-5分钟）
+    # 生产环境建议启用此步骤
+    # - name: Upgrade all packages to latest version
+    #   apt:
+    #     upgrade: dist
+    #     autoremove: yes
+    #     autoclean: yes
+    #   when: ansible_os_family == "Debian"
+    #   register: apt_upgrade_result
+    
+    - name: Install essential security tools
+      apt:
+        name:
+          - vim
+          - curl
+          - wget
+          - net-tools
+          - htop
+          - iptables
+          - iptables-persistent
+          - ufw
+          - fail2ban
+          - unattended-upgrades
+          - apt-listchanges
+        state: present
+      when: ansible_os_family == "Debian"
+    
+    - name: Set timezone to UTC
+      timezone:
+        name: "{{ timezone }}"
+    
+    - name: Enable automatic security updates
+      copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        content: |
+          Unattended-Upgrade::Allowed-Origins {
+              "${distro_id}:${distro_codename}-security";
+              "${distro_id}ESMApps:${distro_codename}-apps-security";
+              "${distro_id}ESM:${distro_codename}-infra-security";
+          };
+          Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+          Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+          Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+          Unattended-Upgrade::Remove-Unused-Dependencies "true";
+          Unattended-Upgrade::Automatic-Reboot "false";
+        mode: '0644'
+      when: ansible_os_family == "Debian"
+    
+    - name: Enable auto-update timer
+      systemd:
+        name: apt-daily-upgrade.timer
+        enabled: yes
+        state: started
+      when: ansible_os_family == "Debian"
+    
+    - name: Configure kernel security parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        sysctl_set: yes
+        reload: yes
+      loop:
+        # 禁用 IP 转发（除非需要路由功能）
+        - { name: 'net.ipv4.ip_forward', value: '0' }
+        # 启用反向路径过滤（防止 IP 欺骗）
+        - { name: 'net.ipv4.conf.all.rp_filter', value: '1' }
+        - { name: 'net.ipv4.conf.default.rp_filter', value: '1' }
+        # 禁用 ICMP 重定向接受
+        - { name: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.accept_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.all.secure_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.secure_redirects', value: '0' }
+        # 禁用源路由
+        - { name: 'net.ipv4.conf.all.accept_source_route', value: '0' }
+        - { name: 'net.ipv4.conf.default.accept_source_route', value: '0' }
+        # 启用 SYN cookies（防 SYN 洪水攻击）
+        - { name: 'net.ipv4.tcp_syncookies', value: '1' }
+        # 禁用发送 ICMP 重定向
+        - { name: 'net.ipv4.conf.all.send_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.send_redirects', value: '0' }
+        # 记录可疑数据包
+        - { name: 'net.ipv4.conf.all.log_martians', value: '1' }
+        - { name: 'net.ipv4.conf.default.log_martians', value: '1' }
+        # 忽略 ICMP 广播请求
+        - { name: 'net.ipv4.icmp_echo_ignore_broadcasts', value: '1' }
+        # 忽略伪造的 ICMP 错误响应
+        - { name: 'net.ipv4.icmp_ignore_bogus_error_responses', value: '1' }
+    
+    - name: Create security log directory
+      file:
+        path: /var/log/security
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Configure rsyslog for security events
+      blockinfile:
+        path: /etc/rsyslog.d/10-security.conf
+        create: yes
+        block: |
+          # Security event logging
+          :msg, contains, "IPT-" /var/log/security/firewall.log
+          :msg, contains, "SSH-brute-force" /var/log/security/ssh-attacks.log
+          :msg, contains, "fail2ban" /var/log/security/fail2ban.log
+        mode: '0644'
+      notify: restart rsyslog
+    
+    - name: Ensure basic directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/security
+        - /opt/scripts
+        - /opt/backups
+        - /etc/quants-security
+        - /etc/quants-security/backups
+    
+    - name: Create initial security completion marker
+      copy:
+        dest: /etc/quants-security/initial_security_complete
+        content: |
+          Initial Security Setup Completed
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          System Updated: Yes
+          Security Tools Installed: Yes
+          Kernel Parameters Configured: Yes
+          Auto Updates Enabled: Yes
+        mode: '0644'
+    
+    - name: Display completion message
+      debug:
+        msg:
+          - "============================================"
+          - "Initial Security Setup Completed"
+          - "============================================"
+          - "System has been updated and secured"
+          - "Essential security tools installed"
+          - "Kernel security parameters configured"
+          - "Automatic security updates enabled"
+          - "Ready for firewall configuration"
+          - "============================================"
+  
+  handlers:
+    - name: restart rsyslog
+      systemd:
+        name: rsyslog
+        state: restarted
+

@@ -1,0 +1,21 @@
+---
+- name: 停止并清理 Grafana
+  hosts: localhost
+  connection: local
+  become: true
+  tasks:
+    - name: 停止 Grafana 容器
+      shell: |
+        if [ -f /tmp/grafana/docker-compose.yml ]; then
+          cd /tmp/grafana && docker compose down -v
+        fi
+      ignore_errors: true
+
+    - name: 删除 Grafana 数据目录
+      file:
+        path: /tmp/grafana
+        state: absent
+
+    - name: 清理 Docker 卷
+      shell: docker volume rm $(docker volume ls -q | grep grafana) || true
+      ignore_errors: true 

@@ -1,0 +1,16 @@
+---
+- name: 测试 Ansible 连接
+  hosts: all
+  gather_facts: true
+  
+  tasks:
+    - name: Ping 测试
+      ping:
+      
+    - name: 显示主机信息
+      debug:
+        msg: 
+          - "主机名: {{ inventory_hostname }}"
+          - "IP地址: {{ ansible_host }}"
+          - "Python版本: {{ ansible_python_version }}"
+          - "操作系统: {{ ansible_distribution }} {{ ansible_distribution_version }}" 

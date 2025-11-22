@@ -1,0 +1,46 @@
+# 数据收集器安全规则配置
+# 适用于运行数据收集服务的实例
+
+# SSH 端口（自定义）
+ssh_port: 6677
+
+# WireGuard VPN 端口
+wireguard_port: 51820
+
+# VPN 网络
+vpn_network: "10.0.0.0/24"
+
+# 是否记录被拒绝的流量
+log_dropped: false
+
+# 公开访问的端口（数据收集器通常不需要公开端口）
+public_ports: []
+
+# 仅限 VPN 网络访问的端口
+vpn_only_ports:
+  # Node Exporter - 系统指标收集
+  - port: 9100
+    proto: tcp
+    comment: "Node Exporter"
+  
+  # 数据收集器状态 API（可选）
+  - port: 8000
+    proto: tcp
+    comment: "Collector Status API"
+
+# 动态服务端口
+service_ports: []
+
+# 数据收集器特定配置
+collector_config:
+  # 允许的 CEX 交易所 API 端点（出站规则）
+  allowed_endpoints:
+    - "api.gateio.ws"
+    - "api.binance.com"
+    - "api.mexc.com"
+  
+  # 允许的 RPC 节点（出站规则）
+  allowed_rpc:
+    - "mainnet.base.org"
+    - "bsc-dataseed.binance.org"
+

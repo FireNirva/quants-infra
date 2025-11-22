@@ -1,0 +1,32 @@
+# Production Environment - Example Configuration
+# ⚠️ 生产环境配置 - 请仔细审查所有设置
+# 复制此文件为 terraform.tfvars 并修改以下值
+
+region         = "ap-northeast-1"
+aws_profile    = "production"  # 使用独立的生产环境 AWS profile
+key_pair_name  = "prod-lightsail-key"  # 生产环境专用密钥对
+
+# ⚠️ 严格限制 SSH 访问（必需）
+ssh_allowed_cidrs = [
+  "203.0.113.0/24",    # 办公室固定 IP
+  "198.51.100.10/32"   # VPN 出口 IP
+]
+
+# VPN 访问（WireGuard）
+vpn_allowed_cidrs = [
+  "0.0.0.0/0"  # WireGuard 使用密钥认证，可以开放
+]
+
+# Grafana 访问（建议通过 VPN）
+grafana_allowed_cidrs = [
+  "203.0.113.0/24",    # 办公室
+  "0.0.0.0/0"          # 或开放（需要 Grafana 认证）
+]
+
+# 注意事项：
+# 1. 使用独立的 AWS IAM 用户和 profile 用于生产环境
+# 2. 启用 Terraform 远程后端（S3 + DynamoDB）
+# 3. 确保所有敏感信息不要提交到 git
+# 4. 定期轮换 SSH 密钥和 API 密钥
+# 5. 启用实例备份和监控告警
+

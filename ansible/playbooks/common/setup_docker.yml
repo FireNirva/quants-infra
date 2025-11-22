@@ -1,0 +1,89 @@
+---
+- name: 安装和配置 Docker
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: true
+
+  vars:
+    docker_packages:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - software-properties-common
+
+  tasks:
+    - name: 检查操作系统版本
+      fail:
+        msg: "不支持的操作系统版本: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      when: >
+        ansible_distribution != "Ubuntu" or
+        ansible_distribution_version is version('20.04', '<')
+
+    - name: 安装依赖包
+      apt:
+        name: "{{ docker_packages }}"
+        state: present
+        update_cache: yes
+
+    - name: 添加 Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: 添加 Docker 源
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        update_cache: yes
+
+    - name: 安装 Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+    - name: 启动 Docker 服务
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: 将当前用户添加到 docker 组
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: 测试 Docker 安装
+      docker_container:
+        name: hello-world
+        image: hello-world
+        state: started
+      register: docker_test
+
+    - name: 显示测试结果
+      debug:
+        var: docker_test
+
+    - name: 检查 Docker 版本
+      command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: 显示 Docker 版本
+      debug:
+        var: docker_version.stdout
+
+    - name: 检查 Docker 服务状态
+      service_facts:
+      register: service_state
+
+    - name: 显示 Docker 服务状态
+      debug:
+        msg: "Docker 服务状态: {{ service_state.ansible_facts.services['docker.service'].state }}" 

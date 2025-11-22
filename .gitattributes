@@ -1,0 +1,53 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Python files
+*.py text eol=lf
+*.pyi text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+*.bash text eol=lf
+
+# YAML files
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Jinja2 templates
+*.j2 text eol=lf
+
+# Markdown
+*.md text eol=lf
+
+# Terraform
+*.tf text eol=lf
+*.tfvars text eol=lf
+
+# Configuration files
+*.ini text eol=lf
+*.cfg text eol=lf
+*.conf text eol=lf
+*.json text eol=lf
+
+# Documentation
+*.txt text eol=lf
+*.rst text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.tgz binary
+
+# Linguist overrides for accurate language statistics
+*.j2 linguist-language=Jinja
+*.yml linguist-detectable=true
+*.yaml linguist-detectable=true
+docs/** linguist-documentation
+tests/** linguist-vendored=false
+

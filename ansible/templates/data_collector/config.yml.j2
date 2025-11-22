@@ -1,0 +1,71 @@
+# Data Collector Configuration
+# Exchange: {{ exchange }}
+# Generated: {{ ansible_date_time.iso8601 | default('N/A') }}
+
+exchange:
+  name: {{ exchange }}
+  type: {{ exchange_type | default('cex') }}
+
+collection:
+  # Trading pairs to collect
+  pairs:
+{% for pair in pairs.split(',') if pairs %}
+    - {{ pair.strip() }}
+{% else %}
+    - BTC-USDT
+    - ETH-USDT
+{% endfor %}
+  
+  # Collection interval in seconds
+  interval: {{ interval | default(5) }}
+  
+  # Data collection methods
+  methods:
+    - orderbook_snapshot
+    - trades
+    - ticker
+
+# Storage configuration
+storage:
+  type: parquet
+  output_dir: {{ output_dir | default('/data') }}
+  compression: snappy
+  partition_by: date
+  
+  # Retention policy
+  retention_days: {{ retention_days | default(90) }}
+
+# Monitoring and metrics
+monitoring:
+  enabled: true
+  port: {{ metrics_port | default(9090) }}
+  path: /metrics
+  
+  # Metrics to export
+  metrics:
+    - collection_rate
+    - data_size
+    - latency
+    - error_count
+
+# Logging
+logging:
+  level: {{ log_level | default('INFO') }}
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  
+  # Log to file and console
+  handlers:
+    - console
+    - file
+  
+  file:
+    path: /var/log/data-collector.log
+    max_bytes: 10485760  # 10MB
+    backup_count: 3
+
+# Performance tuning
+performance:
+  workers: {{ workers | default(4) }}
+  batch_size: {{ batch_size | default(100) }}
+  queue_size: {{ queue_size | default(1000) }}
+

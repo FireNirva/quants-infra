@@ -1,0 +1,112 @@
+---
+- name: 服务部署后调整防火墙
+  hosts: all
+  become: true
+  become_method: sudo
+  
+  vars:
+    iptables_rules_file: /etc/iptables/rules.v4
+    backup_dir: /etc/quants-security/backups
+    
+  tasks:
+    - name: 显示服务配置信息
+      debug:
+        msg: |
+          配置主机: {{ ansible_host }}
+          服务类型: {{ service_type }}
+          VPN 网络: {{ vpn_network }}
+    
+    - name: 验证服务类型
+      assert:
+        that:
+          - service_type is defined
+          - service_type in ['data-collector', 'monitor', 'execution']
+        fail_msg: "无效的服务类型: {{ service_type }}"
+        success_msg: "服务类型有效: {{ service_type }}"
+    
+    - name: 备份当前防火墙规则
+      copy:
+        src: "{{ iptables_rules_file }}"
+        dest: "{{ backup_dir }}/rules.v4.before_{{ service_type }}.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        mode: '0644'
+    
+    - name: 重新生成防火墙规则（包含服务端口）
+      template:
+        src: ../../templates/security/iptables_rules.j2
+        dest: "{{ iptables_rules_file }}"
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        vpn_enabled: true
+      register: rules_updated
+    
+    - name: 应用新的防火墙规则
+      command: iptables-restore "{{ iptables_rules_file }}"
+      when: rules_updated.changed
+    
+    - name: 保存防火墙规则
+      command: netfilter-persistent save
+      when: rules_updated.changed
+    
+    - name: 验证服务端口已开放（VPN 限制）
+      shell: |
+        {% for port in vpn_only_ports %}
+        if iptables -L INPUT -n | grep -q "{{ vpn_network }}.*dpt:{{ port.port }}"; then
+          echo "✓ Port {{ port.port }} ({{ port.comment }}): VPN only"
+        else
+          echo "✗ Port {{ port.port }} not configured" >&2
+          exit 1
+        fi
+        {% endfor %}
+      register: port_check
+      changed_when: false
+    
+    - name: 显示端口验证结果
+      debug:
+        var: port_check.stdout_lines
+    
+    - name: 获取当前防火墙状态
+      command: iptables -L INPUT -v -n
+      register: iptables_status
+      changed_when: false
+    
+    - name: 显示防火墙状态（VPN 限制端口部分）
+      shell: |
+        echo "=== VPN Restricted Ports ==="
+        iptables -L INPUT -v -n | grep "{{ vpn_network }}"
+      register: vpn_ports_status
+      changed_when: false
+      failed_when: false
+    
+    - name: 显示 VPN 限制端口
+      debug:
+        var: vpn_ports_status.stdout_lines
+      when: vpn_ports_status.rc == 0
+    
+    - name: 创建服务防火墙调整完成标记
+      copy:
+        dest: "/etc/quants-security/service_firewall_adjusted_{{ service_type }}"
+        content: |
+          调整时间: {{ ansible_date_time.iso8601 }}
+          服务类型: {{ service_type }}
+          VPN 网络: {{ vpn_network }}
+          VPN 限制端口:
+          {% for port in vpn_only_ports %}
+            - {{ port.port }}/{{ port.proto }}: {{ port.comment }}
+          {% endfor %}
+        mode: '0644'
+    
+    - name: 显示完成信息
+      debug:
+        msg: |
+          ✓ 服务防火墙调整完成
+          ✓ 服务类型: {{ service_type }}
+          ✓ VPN 限制端口已配置
+          
+          开放的端口（仅 VPN 访问）:
+          {% for port in vpn_only_ports %}
+          - {{ port.port }}/{{ port.proto }}: {{ port.comment }}
+          {% endfor %}
+

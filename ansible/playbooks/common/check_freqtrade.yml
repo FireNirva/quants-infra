@@ -1,0 +1,146 @@
+---
+- name: 检查 Freqtrade 状态
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: true
+
+  vars:
+    ft_dir: "/opt/freqtrade"
+    user_data_dir: "{{ ft_dir }}/user_data"
+
+  tasks:
+    - name: 检查 Docker 服务状态
+      service_facts:
+      register: service_state
+
+    - name: 检查 Freqtrade 容器状态
+      command: docker ps -a -f name=freqtrade
+      register: container_status
+      changed_when: false
+
+    - name: 检查 Freqtrade 日志（最近 100 行）
+      command: docker logs --tail 100 freqtrade
+      register: container_logs
+      ignore_errors: true
+      changed_when: false
+
+    - name: 检查配置文件
+      stat:
+        path: "{{ user_data_dir }}/config.json"
+      register: config_check
+
+    - name: 检查配置文件内容
+      command: cat "{{ user_data_dir }}/config.json"
+      register: config_content
+      when: config_check.stat.exists
+      changed_when: false
+
+    - name: 检查策略目录
+      stat:
+        path: "{{ user_data_dir }}/strategies"
+      register: strategies_check
+
+    - name: 检查策略文件
+      find:
+        paths: "{{ user_data_dir }}/strategies"
+        patterns: "*.py"
+      register: strategy_files
+      when: strategies_check.stat.exists
+
+    - name: 收集状态信息
+      set_fact:
+        freqtrade_status:
+          docker_service: "{{ service_state.ansible_facts.services['docker.service'].state }}"
+          container_status: "{{ container_status.stdout }}"
+          container_logs: "{{ container_logs.stdout if container_logs.rc == 0 else 'No logs available' }}"
+          config_exists: "{{ config_check.stat.exists }}"
+          config_content: "{{ config_content.stdout if config_check.stat.exists else 'No config file' }}"
+          strategies_exists: "{{ strategies_check.stat.exists }}"
+          strategy_files: "{{ strategy_files.files | map(attribute='path') | list if strategies_check.stat.exists else [] }}"
+
+    - name: 显示状态报告
+      debug:
+        msg:
+          - "Freqtrade 状态报告:"
+          - "Docker 服务: {{ freqtrade_status.docker_service }}"
+          - "容器状态:"
+          - "{{ freqtrade_status.container_status }}"
+          - "最近日志:"
+          - "{{ freqtrade_status.container_logs }}"
+          - "配置文件: {{ 'exists' if freqtrade_status.config_exists else 'missing' }}"
+          - "策略目录: {{ 'exists' if freqtrade_status.strategies_exists else 'missing' }}"
+          - "策略文件:"
+          - "{{ freqtrade_status.strategy_files }}"
+
+    - name: 检查容器重启问题
+      when: "'Restarting' in container_status.stdout"
+      block:
+        - name: 检查配置文件权限
+          file:
+            path: "{{ user_data_dir }}/config.json"
+            mode: '0644'
+            owner: "{{ ansible_user }}"
+            group: "{{ ansible_user }}"
+
+        - name: 检查策略目录权限
+          file:
+            path: "{{ user_data_dir }}/strategies"
+            mode: '0755'
+            owner: "{{ ansible_user }}"
+            group: "{{ ansible_user }}"
+            state: directory
+
+        - name: 创建默认策略文件
+          copy:
+            content: |
+              from freqtrade.strategy.interface import IStrategy
+              from pandas import DataFrame
+              import talib.abstract as ta
+              import freqtrade.vendor.qtpylib.indicators as qtpylib
+
+              class SampleStrategy(IStrategy):
+                  INTERFACE_VERSION = 3
+                  minimal_roi = {"0": 0.1}
+                  stoploss = -0.1
+                  timeframe = '5m'
+
+                  def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+                      return dataframe
+
+                  def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+                      dataframe['enter_long'] = 1
+                      return dataframe
+
+                  def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+                      dataframe['exit_long'] = 0
+                      return dataframe
+            dest: "{{ user_data_dir }}/strategies/sample_strategy.py"
+            mode: '0644'
+            owner: "{{ ansible_user }}"
+            group: "{{ ansible_user }}"
+          when: not strategy_files.files
+
+        - name: 尝试重启容器
+          docker_compose:
+            project_src: "{{ ft_dir }}"
+            state: present
+            restarted: yes
+          register: restart_result
+
+        - name: 显示重启结果
+          debug:
+            msg: "容器重启结果: {{ restart_result }}"
+
+        - name: 等待容器启动
+          wait_for:
+            timeout: 10
+
+        - name: 再次检查容器状态
+          command: docker ps -a -f name=freqtrade
+          register: final_status
+          changed_when: false
+
+        - name: 显示最终状态
+          debug:
+            msg: "最终容器状态: {{ final_status.stdout }}"

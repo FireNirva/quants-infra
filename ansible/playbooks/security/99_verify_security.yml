@@ -1,0 +1,249 @@
+---
+- name: 安全配置验证
+  hosts: all
+  become: true
+  become_method: sudo
+  
+  vars:
+    backup_dir: /etc/quants-security/backups
+    verification_results: {}
+  
+  tasks:
+    - name: 显示验证信息
+      debug:
+        msg: |
+          开始安全配置验证...
+          主机: {{ ansible_host }}
+          SSH 端口: {{ ssh_port }}
+    
+    # ============================================
+    # 1. 防火墙规则检查
+    # ============================================
+    
+    - name: 检查 iptables-persistent 是否安装
+      command: which iptables-persistent
+      register: iptables_persistent_check
+      changed_when: false
+      failed_when: false
+    
+    - name: 验证防火墙规则文件存在
+      stat:
+        path: /etc/iptables/rules.v4
+      register: firewall_rules_file
+    
+    - name: 获取当前 iptables 规则
+      command: iptables -L INPUT -v -n
+      register: iptables_rules
+      changed_when: false
+    
+    - name: 检查 SSH 端口规则
+      shell: |
+        if iptables -L INPUT -n | grep -q "dpt:{{ ssh_port }}"; then
+          echo "SSH port rule exists"
+          exit 0
+        else
+          echo "SSH port rule missing"
+          exit 1
+        fi
+      register: ssh_port_rule
+      changed_when: false
+      failed_when: false
+    
+    - name: 检查默认 DROP 策略
+      shell: |
+        if iptables -L INPUT -n | head -1 | grep -q "DROP"; then
+          echo "Default DROP policy configured"
+          exit 0
+        else
+          echo "Default DROP policy missing"
+          exit 1
+        fi
+      register: default_drop_policy
+      changed_when: false
+      failed_when: false
+    
+    # ============================================
+    # 2. SSH 配置验证
+    # ============================================
+    
+    - name: 读取 SSH 配置文件
+      slurp:
+        src: /etc/ssh/sshd_config
+      register: ssh_config_content
+    
+    - name: 解析 SSH 配置
+      set_fact:
+        ssh_config_parsed: "{{ ssh_config_content.content | b64decode }}"
+    
+    - name: 检查 SSH 端口配置
+      shell: |
+        if grep -q "^Port {{ ssh_port }}" /etc/ssh/sshd_config; then
+          echo "SSH port configured correctly"
+          exit 0
+        else
+          echo "SSH port not configured"
+          exit 1
+        fi
+      register: ssh_port_config
+      changed_when: false
+      failed_when: false
+    
+    - name: 检查密码认证是否禁用
+      shell: |
+        if grep -q "^PasswordAuthentication no" /etc/ssh/sshd_config; then
+          echo "Password authentication disabled"
+          exit 0
+        else
+          echo "Password authentication not disabled"
+          exit 1
+        fi
+      register: password_auth_check
+      changed_when: false
+      failed_when: false
+    
+    - name: 检查 root 登录是否禁用
+      shell: |
+        if grep -q "^PermitRootLogin no" /etc/ssh/sshd_config; then
+          echo "Root login disabled"
+          exit 0
+        else
+          echo "Root login not disabled"
+          exit 1
+        fi
+      register: root_login_check
+      changed_when: false
+      failed_when: false
+    
+    - name: 检查密钥认证是否启用
+      shell: |
+        if grep -q "^PubkeyAuthentication yes" /etc/ssh/sshd_config; then
+          echo "Pubkey authentication enabled"
+          exit 0
+        else
+          echo "Pubkey authentication not enabled"
+          exit 1
+        fi
+      register: pubkey_auth_check
+      changed_when: false
+      failed_when: false
+    
+    # ============================================
+    # 3. fail2ban 状态检查
+    # ============================================
+    
+    - name: 检查 fail2ban 是否安装
+      command: which fail2ban-client
+      register: fail2ban_installed
+      changed_when: false
+      failed_when: false
+    
+    - name: 获取 fail2ban 状态
+      command: fail2ban-client status
+      register: fail2ban_status
+      changed_when: false
+      failed_when: false
+      when: fail2ban_installed.rc == 0
+    
+    - name: 获取 sshd jail 状态
+      command: fail2ban-client status sshd
+      register: sshd_jail_status
+      changed_when: false
+      failed_when: false
+      when: fail2ban_installed.rc == 0
+    
+    # ============================================
+    # 4. 系统安全参数验证
+    # ============================================
+    
+    - name: 检查系统安全参数
+      shell: |
+        echo "=== 系统安全参数 ==="
+        sysctl net.ipv4.ip_forward
+        sysctl net.ipv4.conf.all.rp_filter
+        sysctl net.ipv4.tcp_syncookies
+      register: security_params
+      changed_when: false
+      failed_when: false
+    
+    # ============================================
+    # 5. 开放端口检查
+    # ============================================
+    
+    - name: 获取监听端口列表
+      shell: ss -tulnp | grep LISTEN
+      register: listening_ports
+      changed_when: false
+      failed_when: false
+    
+    # ============================================
+    # 6. 安全标记文件检查
+    # ============================================
+    
+    - name: 检查安全配置标记文件
+      find:
+        paths: /etc/quants-security
+        patterns: "*_firewall_adjusted*,vpn_firewall_adjusted"
+      register: security_markers
+    
+    # ============================================
+    # 7. 生成验证报告
+    # ============================================
+    
+    - name: 构建验证结果
+      set_fact:
+        security_status:
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          host: "{{ ansible_host }}"
+          checks:
+            firewall:
+              rules_file_exists: "{{ firewall_rules_file.stat.exists }}"
+              iptables_persistent_installed: "{{ iptables_persistent_check.rc == 0 }}"
+              ssh_port_rule_configured: "{{ ssh_port_rule.rc == 0 }}"
+              default_drop_policy: "{{ default_drop_policy.rc == 0 }}"
+              passed: "{{ firewall_rules_file.stat.exists and iptables_persistent_check.rc == 0 and ssh_port_rule.rc == 0 and default_drop_policy.rc == 0 }}"
+            ssh:
+              port_configured: "{{ ssh_port_config.rc == 0 }}"
+              password_auth_disabled: "{{ password_auth_check.rc == 0 }}"
+              root_login_disabled: "{{ root_login_check.rc == 0 }}"
+              pubkey_auth_enabled: "{{ pubkey_auth_check.rc == 0 }}"
+              passed: "{{ ssh_port_config.rc == 0 and password_auth_check.rc == 0 and root_login_check.rc == 0 and pubkey_auth_check.rc == 0 }}"
+            fail2ban:
+              installed: "{{ fail2ban_installed.rc == 0 }}"
+              service_running: "{{ fail2ban_status.rc == 0 if fail2ban_installed.rc == 0 else false }}"
+              sshd_jail_active: "{{ sshd_jail_status.rc == 0 if fail2ban_installed.rc == 0 else false }}"
+              passed: "{{ fail2ban_installed.rc == 0 and fail2ban_status.rc == 0 }}"
+            security_markers:
+              count: "{{ security_markers.matched }}"
+              files: "{{ security_markers.files | map(attribute='path') | list }}"
+          summary:
+            firewall_status: "{{ 'PASS' if (firewall_rules_file.stat.exists and iptables_persistent_check.rc == 0 and ssh_port_rule.rc == 0 and default_drop_policy.rc == 0) else 'FAIL' }}"
+            ssh_status: "{{ 'PASS' if (ssh_port_config.rc == 0 and password_auth_check.rc == 0 and root_login_check.rc == 0 and pubkey_auth_check.rc == 0) else 'FAIL' }}"
+            fail2ban_status: "{{ 'PASS' if (fail2ban_installed.rc == 0 and fail2ban_status.rc == 0) else 'FAIL' }}"
+            overall_status: "{{ 'PASS' if (firewall_rules_file.stat.exists and ssh_port_config.rc == 0 and fail2ban_installed.rc == 0) else 'FAIL' }}"
+    
+    - name: 保存验证结果到文件
+      copy:
+        content: "{{ security_status | to_nice_json }}"
+        dest: "/etc/quants-security/verification_result_{{ ansible_date_time.epoch }}.json"
+        mode: '0644'
+    
+    - name: 显示验证结果摘要
+      debug:
+        msg: |
+          ============================================
+          安全配置验证结果
+          ============================================
+          主机: {{ ansible_host }}
+          时间: {{ ansible_date_time.iso8601 }}
+          
+          防火墙: {{ security_status.summary.firewall_status }}
+          SSH 配置: {{ security_status.summary.ssh_status }}
+          fail2ban: {{ security_status.summary.fail2ban_status }}
+          
+          总体状态: {{ security_status.summary.overall_status }}
+          ============================================
+    
+    - name: 返回验证结果
+      debug:
+        var: security_status
+

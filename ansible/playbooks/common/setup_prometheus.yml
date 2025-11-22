@@ -1,0 +1,62 @@
+---
+- name: 配置 Prometheus Docker 环境
+  hosts: localhost
+  gather_facts: true
+
+  tasks:
+    - name: 确保 Docker 已安装
+      command: docker --version
+      register: docker_check
+      ignore_errors: true
+
+    - name: 检查 Docker Compose 是否已安装
+      command: docker compose version
+      register: compose_check
+      ignore_errors: true
+
+    - name: 创建 Prometheus 配置目录
+      file:
+        path: "/tmp/prometheus"
+        state: directory
+        mode: '0755'
+
+    - name: 清理旧的 Prometheus 系统服务和文件（如果存在）
+      become: true
+      become_method: sudo
+      block:
+        - name: 停止并禁用 Prometheus 服务（如果存在）
+          systemd:
+            name: prometheus
+            state: stopped
+            enabled: no
+          ignore_errors: true
+
+        - name: 删除旧的 Prometheus 系统服务文件
+          file:
+            path: "/etc/systemd/system/prometheus.service"
+            state: absent
+
+        - name: 删除旧的 Prometheus 配置目录
+          file:
+            path: "/etc/prometheus"
+            state: absent
+
+        - name: 删除旧的 Prometheus 数据目录
+          file:
+            path: "/var/lib/prometheus"
+            state: absent
+
+        - name: 删除旧的 Prometheus 二进制文件
+          file:
+            path: "/usr/local/bin/{{ item }}"
+            state: absent
+          with_items:
+            - prometheus
+            - promtool
+
+        - name: 删除 prometheus 系统用户（如果存在）
+          user:
+            name: prometheus
+            state: absent
+            remove: yes
+          ignore_errors: true

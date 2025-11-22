@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  data-collector:
+    image: {{ docker_image | default('quants-lab:latest') }}
+    container_name: data-collector-{{ exchange }}
+    restart: always
+    
+    environment:
+      - EXCHANGE={{ exchange }}
+      - PAIRS={{ pairs }}
+      - INTERVAL={{ interval | default(5) }}
+      - OUTPUT_DIR=/data
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL={{ log_level | default('INFO') }}
+    
+    volumes:
+      - {{ output_dir | default('/data/orderbook_snapshots') }}:/data
+      - /opt/data-collector/config.yml:/app/config.yml:ro
+    
+    ports:
+      - "{{ metrics_port | default(9090) }}:9090"
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    networks:
+      - quants-network
+
+networks:
+  quants-network:
+    driver: bridge
+

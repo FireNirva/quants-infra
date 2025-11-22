@@ -1,0 +1,54 @@
+---
+- name: 停止并卸载 Node Exporter
+  hosts: all
+  become: true
+  tasks:
+    - name: 检查 Node Exporter 服务是否存在
+      stat:
+        path: /etc/systemd/system/node_exporter.service
+      register: service_file
+
+    - name: 停止 Node Exporter 服务
+      systemd:
+        name: node_exporter
+        state: stopped
+        enabled: false
+      when: service_file.stat.exists
+      ignore_errors: true
+
+    - name: 删除 Node Exporter 服务文件
+      file:
+        path: /etc/systemd/system/node_exporter.service
+        state: absent
+
+    - name: 重新加载 systemd
+      systemd:
+        daemon_reload: yes
+      ignore_errors: true
+
+    - name: 删除 Node Exporter 二进制文件
+      file:
+        path: /usr/local/bin/node_exporter
+        state: absent
+
+    - name: 删除 Node Exporter 用户
+      user:
+        name: node_exporter
+        state: absent
+        remove: yes
+      ignore_errors: true
+
+    - name: 删除 Node Exporter 数据目录
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /var/lib/node_exporter
+        - /etc/node_exporter
+
+    - name: 清理系统日志
+      shell: |
+        journalctl --vacuum-time=1s
+        journalctl --rotate
+        systemctl restart systemd-journald
+      ignore_errors: true 
