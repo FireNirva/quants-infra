@@ -64,6 +64,7 @@ quants-ctl security setup \
 
 ### 其他
 - **[变更日志](CHANGELOG.md)** - 版本更新记录
+- **[Git 使用指南](GIT_GUIDE.md)** - Git 版本控制完整指南
 - **[历史文档](docs/archived/)** - 项目开发历史和里程碑
 
 ## 🛠️ CLI 命令
