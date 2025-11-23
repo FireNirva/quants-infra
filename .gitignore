@@ -114,3 +114,5 @@ ansible/inventory/hosts.yml
 # Compiled Files
 *.pyc
 *.pyo
+ansible/inventory/hosts.json
+ansible/artifacts/

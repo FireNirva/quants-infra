@@ -1,0 +1,93 @@
+---
+# 配置 Prometheus 告警规则
+# 更新告警规则并重载 Prometheus
+
+- name: 配置 Prometheus 告警规则
+  hosts: all
+  become: yes
+  vars:
+    prometheus_dir: /opt/prometheus
+    # 注意：ansible_runner 的 PWD 是 ansible/，需要向上一级到仓库根
+    config_dir: "{{ playbook_dir }}/../../../config/monitoring"
+    prometheus_version: "v2.48.0"
+    
+  tasks:
+    - name: 检查 Prometheus 配置目录是否存在
+      stat:
+        path: "{{ prometheus_dir }}"
+      register: prom_dir_check
+    
+    - name: 确认 Prometheus 已部署
+      fail:
+        msg: "Prometheus 未部署，请先运行 setup_prometheus.yml"
+      when: not prom_dir_check.stat.exists
+    
+    # 注意：假设配置目录已存在
+    # E2E 测试环境中配置目录应已就位
+    
+    - name: 备份现有告警规则
+      copy:
+        src: "{{ prometheus_dir }}/alert_rules.yml"
+        dest: "{{ prometheus_dir }}/alert_rules.yml.backup.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+      ignore_errors: yes
+    
+    - name: 复制新的告警规则
+      copy:
+        src: "{{ config_dir }}/prometheus/alert_rules.yml"
+        dest: "{{ prometheus_dir }}/alert_rules.yml"
+        mode: '0644'
+      register: rules_updated
+    
+    - name: 验证告警规则语法
+      command: >
+        docker run --rm
+        --entrypoint promtool
+        -v {{ prometheus_dir }}:/etc/prometheus
+        prom/prometheus:{{ prometheus_version }}
+        check rules /etc/prometheus/alert_rules.yml
+      register: promtool_result
+      failed_when: promtool_result.rc != 0
+      changed_when: false
+    
+    - name: 重载 Prometheus 配置
+      uri:
+        url: "http://localhost:9090/-/reload"
+        method: POST
+        status_code: 200
+      register: reload_result
+      failed_when: false
+      when: rules_updated.changed
+    
+    - name: 如果重载失败，重启 Prometheus 容器
+      docker_container:
+        name: prometheus
+        state: started
+        restart: yes
+      when: rules_updated.changed and (reload_result.failed or reload_result.status != 200)
+    
+    - name: 等待 Prometheus 重启完成
+      uri:
+        url: "http://localhost:9090/-/healthy"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 10
+      delay: 3
+      when: rules_updated.changed
+    
+    - name: 显示配置结果（有更新）
+      when: rules_updated.changed
+      debug:
+        msg:
+          - "✅ 告警规则已更新"
+          - "规则文件: {{ prometheus_dir }}/alert_rules.yml"
+          - "备份: {{ prometheus_dir }}/alert_rules.yml.backup.{{ ansible_date_time.epoch }}"
+          - "{% if reload_result.status == 200 %}Prometheus 配置已重载{% else %}Prometheus 容器已重启{% endif %}"
+
+    - name: 显示配置结果（无更新）
+      when: not rules_updated.changed
+      debug:
+        msg:
+          - "⊘ 告警规则无变化（跳过重载/重启）"
+          - "规则文件: {{ prometheus_dir }}/alert_rules.yml"

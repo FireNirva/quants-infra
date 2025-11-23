@@ -1,0 +1,61 @@
+---
+# 部署 Node Exporter 系统指标采集器
+# 用于采集 CPU、内存、磁盘等系统级指标
+
+- name: 部署 Node Exporter
+  hosts: all
+  become: yes
+  vars:
+    node_exporter_version: "{{ node_exporter_version | default('v1.7.0') }}"
+    node_exporter_port: 9100
+    
+  tasks:
+    - name: 拉取 Node Exporter Docker 镜像
+      docker_image:
+        name: "prom/node-exporter:{{ node_exporter_version }}"
+        source: pull
+    
+    - name: 停止现有 Node Exporter 容器（如果存在）
+      docker_container:
+        name: node-exporter
+        state: absent
+      ignore_errors: yes
+    
+    - name: 启动 Node Exporter 容器
+      docker_container:
+        name: node-exporter
+        image: "prom/node-exporter:{{ node_exporter_version }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          # 仅绑定到 localhost，Prometheus 在同一实例上抓取
+          - "127.0.0.1:{{ node_exporter_port }}:9100"
+        command:
+          - "--path.procfs=/host/proc"
+          - "--path.sysfs=/host/sys"
+          - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+        volumes:
+          - /proc:/host/proc:ro
+          - /sys:/host/sys:ro
+          - /:/rootfs:ro
+        labels:
+          com.quants.service: "node-exporter"
+          com.quants.component: "monitoring"
+    
+    - name: 等待 Node Exporter 启动
+      uri:
+        url: "http://localhost:{{ node_exporter_port }}/metrics"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 10
+      delay: 2
+    
+    - name: 显示部署信息
+      debug:
+        msg:
+          - "✅ Node Exporter 部署成功"
+          - "版本: {{ node_exporter_version }}"
+          - "指标端点: http://localhost:{{ node_exporter_port }}/metrics"
+          - "采集指标: CPU, 内存, 磁盘, 网络"
+

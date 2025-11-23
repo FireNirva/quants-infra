@@ -1,0 +1,40 @@
+---
+# 为数据采集器开放 metrics 端口（仅允许监控实例访问）
+
+- name: 开放 Metrics 端口给监控实例
+  hosts: all
+  become: yes
+  vars:
+    metrics_port: "{{ metrics_port | default(8001) }}"
+    monitor_ip: "{{ monitor_ip }}"  # 必需：监控实例 IP
+    description: "{{ description | default('Prometheus metrics') }}"
+    
+  tasks:
+    - name: 确认监控实例 IP 已提供
+      fail:
+        msg: "必须提供监控实例 IP (monitor_ip)"
+      when: monitor_ip is not defined or monitor_ip == ""
+    
+    - name: 安装 ufw（如果未安装）
+      apt:
+        name: ufw
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+    
+    - name: 允许监控实例访问 metrics 端口
+      ufw:
+        rule: allow
+        port: "{{ metrics_port }}"
+        proto: tcp
+        from_ip: "{{ monitor_ip }}"
+        comment: "{{ description }}"
+    
+    - name: 显示配置结果
+      debug:
+        msg:
+          - "✅ Metrics 端口已开放"
+          - "端口: {{ metrics_port }}/tcp"
+          - "允许来源: {{ monitor_ip }}"
+          - "说明: {{ description }}"
+

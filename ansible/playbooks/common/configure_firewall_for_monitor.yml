@@ -1,0 +1,74 @@
+---
+# 配置监控实例的防火墙规则
+# 仅允许 SSH，所有监控端口绑定到 127.0.0.1（通过 SSH 隧道访问）
+
+- name: 配置监控实例防火墙
+  hosts: all
+  become: yes
+  vars:
+    ssh_port: "{{ ssh_port | default(6677) }}"
+    admin_ip: "{{ admin_ip | default('0.0.0.0/0') }}"  # 管理员 IP 白名单
+    
+  tasks:
+    - name: 安装 ufw（如果未安装）
+      apt:
+        name: ufw
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+    
+    - name: 禁用 ufw（准备重新配置）
+      ufw:
+        state: disabled
+    
+    - name: 设置默认策略（拒绝所有传入）
+      ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+    
+    - name: 设置默认策略（允许所有传出）
+      ufw:
+        state: enabled
+        policy: allow
+        direction: outgoing
+    
+    - name: 允许 SSH（管理员 IP）
+      ufw:
+        rule: allow
+        port: "{{ ssh_port }}"
+        proto: tcp
+        from_ip: "{{ admin_ip }}"
+      when: admin_ip != '0.0.0.0/0'
+    
+    - name: 允许 SSH（所有 IP，如果未指定白名单）
+      ufw:
+        rule: allow
+        port: "{{ ssh_port }}"
+        proto: tcp
+      when: admin_ip == '0.0.0.0/0'
+    
+    - name: 启用 ufw
+      ufw:
+        state: enabled
+    
+    - name: 显示防火墙配置结果
+      debug:
+        msg:
+          - "✅ 监控实例防火墙已配置"
+          - "策略: 默认拒绝所有传入，允许所有传出"
+          - "SSH 端口 {{ ssh_port }}: 允许{% if admin_ip != '0.0.0.0/0' %} (仅 {{ admin_ip }}){% endif %}"
+          - "监控端口: 绑定到 127.0.0.1（通过 SSH 隧道访问）"
+          - "  - Grafana: localhost:3000"
+          - "  - Prometheus: localhost:9090"
+          - "  - Alertmanager: localhost:9093"
+    
+    - name: 显示 ufw 状态
+      command: ufw status verbose
+      register: ufw_status
+      changed_when: false
+    
+    - name: 输出防火墙规则
+      debug:
+        var: ufw_status.stdout_lines
+

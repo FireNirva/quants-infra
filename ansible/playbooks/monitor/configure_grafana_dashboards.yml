@@ -1,0 +1,61 @@
+---
+# 配置 Grafana Dashboards
+# 注意：dashboards 已通过 provisioning 自动加载，此 playbook 用于运行时更新
+
+- name: 配置 Grafana Dashboards
+  hosts: all
+  become: yes
+  vars:
+    grafana_dir: /opt/grafana
+    # 注意：ansible_runner 的 PWD 是 ansible/，需要向上一级到仓库根
+    config_dir: "{{ playbook_dir }}/../../../config/monitoring"
+    
+  tasks:
+    - name: 检查 Grafana 配置目录是否存在
+      stat:
+        path: "{{ grafana_dir }}"
+      register: grafana_dir_check
+    
+    - name: 确认 Grafana 已部署
+      fail:
+        msg: "Grafana 未部署，请先运行 setup_grafana.yml"
+      when: not grafana_dir_check.stat.exists
+    
+    # 注意：假设配置目录已存在
+    # E2E 测试环境中配置目录应已就位
+    
+    - name: 检查远程 dashboard 目录是否存在
+      stat:
+        path: "{{ config_dir }}/grafana/dashboards"
+      register: remote_dashboards_check
+    
+    - name: 复制 dashboard 文件到远程（如果存在）
+      copy:
+        src: "{{ config_dir }}/grafana/dashboards/"
+        dest: "{{ grafana_dir }}/provisioning/dashboards/"
+        mode: '0644'
+      when: remote_dashboards_check.stat.exists
+      register: dashboards_updated
+    
+    - name: 重启 Grafana 以加载新 dashboard（如果有更新）
+      docker_container:
+        name: grafana
+        state: started
+        restart: yes
+      when: dashboards_updated.changed
+    
+    - name: 等待 Grafana 重启完成
+      uri:
+        url: "http://localhost:3000/api/health"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 10
+      delay: 3
+      when: dashboards_updated.changed
+    
+    - name: 显示配置结果
+      debug:
+        msg:
+          - "{% if dashboards_updated.changed %}✅ Grafana dashboards 已更新{% else %}⊘ Dashboards 无变化{% endif %}"
+          - "Dashboard 目录: {{ grafana_dir }}/provisioning/dashboards/"

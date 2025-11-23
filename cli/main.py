@@ -14,6 +14,7 @@ from typing import Dict, Optional
 # 导入子命令
 from cli.commands.infra import infra
 from cli.commands.security import security
+from cli.commands.monitor import monitor
 
 
 # 部署器映射
@@ -351,6 +352,7 @@ def _show_status_json(service_filter=None):
 # 注册子命令组
 cli.add_command(infra)
 cli.add_command(security)
+cli.add_command(monitor)
 
 
 if __name__ == '__main__':

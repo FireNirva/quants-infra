@@ -449,4 +449,189 @@ class DockerManager:
 
         except Exception as e:
             self.logger.error(f"停止本地 Docker 失败: {str(e)}")
-            return False 
+            return False
+    
+    def start_container(self, host: str, container_name: str) -> bool:
+        """
+        启动指定容器
+        
+        Args:
+            host: 主机 IP
+            container_name: 容器名称
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            ssh_key = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+            ssh_port = self.config.get('ssh_port', 6677)
+            ssh_user = self.config.get('ssh_user', 'ubuntu')
+            
+            cmd = [
+                'ssh', '-i', os.path.expanduser(ssh_key), '-p', str(ssh_port),
+                f'{ssh_user}@{host}',
+                f'docker start {container_name}'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
+            
+            if result.returncode == 0:
+                self.logger.info(f"容器 {container_name} 已启动")
+                return True
+            else:
+                self.logger.error(f"启动容器失败: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"启动容器错误: {str(e)}")
+            return False
+    
+    def stop_container(self, host: str, container_name: str) -> bool:
+        """
+        停止指定容器
+        
+        Args:
+            host: 主机 IP
+            container_name: 容器名称
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            ssh_key = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+            ssh_port = self.config.get('ssh_port', 6677)
+            ssh_user = self.config.get('ssh_user', 'ubuntu')
+            
+            cmd = [
+                'ssh', '-i', os.path.expanduser(ssh_key), '-p', str(ssh_port),
+                f'{ssh_user}@{host}',
+                f'docker stop {container_name}'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
+            
+            if result.returncode == 0:
+                self.logger.info(f"容器 {container_name} 已停止")
+                return True
+            else:
+                self.logger.error(f"停止容器失败: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"停止容器错误: {str(e)}")
+            return False
+    
+    def restart_container(self, host: str, container_name: str) -> bool:
+        """
+        重启指定容器
+        
+        Args:
+            host: 主机 IP
+            container_name: 容器名称
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            ssh_key = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+            ssh_port = self.config.get('ssh_port', 6677)
+            ssh_user = self.config.get('ssh_user', 'ubuntu')
+            
+            cmd = [
+                'ssh', '-i', os.path.expanduser(ssh_key), '-p', str(ssh_port),
+                f'{ssh_user}@{host}',
+                f'docker restart {container_name}'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, timeout=60, text=True)
+            
+            if result.returncode == 0:
+                self.logger.info(f"容器 {container_name} 已重启")
+                return True
+            else:
+                self.logger.error(f"重启容器失败: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"重启容器错误: {str(e)}")
+            return False
+    
+    def get_container_logs(self, host: str, container_name: str, tail: int = 100) -> str:
+        """
+        获取容器日志
+        
+        Args:
+            host: 主机 IP
+            container_name: 容器名称
+            tail: 显示最后 N 行（默认 100）
+            
+        Returns:
+            str: 容器日志
+        """
+        try:
+            ssh_key = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+            ssh_port = self.config.get('ssh_port', 6677)
+            ssh_user = self.config.get('ssh_user', 'ubuntu')
+            
+            cmd = [
+                'ssh', '-i', os.path.expanduser(ssh_key), '-p', str(ssh_port),
+                f'{ssh_user}@{host}',
+                f'docker logs --tail {tail} {container_name}'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
+            
+            if result.returncode == 0:
+                return result.stdout
+            else:
+                self.logger.error(f"获取容器日志失败: {result.stderr}")
+                return f"Error: {result.stderr}"
+                
+        except Exception as e:
+            self.logger.error(f"获取容器日志错误: {str(e)}")
+            return f"Error: {str(e)}"
+    
+    def get_container_status(self, host: str, container_name: str) -> dict:
+        """
+        获取容器状态
+        
+        Args:
+            host: 主机 IP
+            container_name: 容器名称
+            
+        Returns:
+            dict: 容器状态信息
+        """
+        try:
+            ssh_key = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+            ssh_port = self.config.get('ssh_port', 6677)
+            ssh_user = self.config.get('ssh_user', 'ubuntu')
+            
+            cmd = [
+                'ssh', '-i', os.path.expanduser(ssh_key), '-p', str(ssh_port),
+                f'{ssh_user}@{host}',
+                f'docker inspect {container_name}'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, timeout=30, text=True)
+            
+            if result.returncode == 0:
+                import json
+                container_info = json.loads(result.stdout)[0]
+                return {
+                    'name': container_info['Name'].lstrip('/'),
+                    'status': container_info['State']['Status'],
+                    'running': container_info['State']['Running'],
+                    'started_at': container_info['State']['StartedAt'],
+                    'image': container_info['Config']['Image']
+                }
+            else:
+                return {
+                    'error': f"Container not found: {result.stderr}"
+                }
+                
+        except Exception as e:
+            self.logger.error(f"获取容器状态错误: {str(e)}")
+            return {
+                'error': str(e)
+            } 

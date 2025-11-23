@@ -1,0 +1,131 @@
+---
+# 部署 Alertmanager 告警管理系统
+# 基于 quants-lab/docker-compose.monitoring.yml 转换而来
+
+- name: 部署 Alertmanager
+  hosts: all
+  become: yes
+  vars:
+    alertmanager_version: "v0.26.0"
+    alertmanager_dir: /opt/alertmanager
+    alertmanager_data_dir: /var/lib/alertmanager
+    alertmanager_port: 9093
+    telegram_bot_token: "{{ telegram_bot_token | default('') }}"
+    telegram_chat_id: "{{ telegram_chat_id | default('') }}"
+    
+  tasks:
+    - name: 创建 Alertmanager 目录
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ alertmanager_dir }}"
+        - "{{ alertmanager_data_dir }}"
+    
+    - name: 调整 Alertmanager 数据目录权限（容器使用 nobody 用户）
+      file:
+        path: "{{ alertmanager_data_dir }}"
+        state: directory
+        owner: 65534
+        group: 65534
+        mode: '0775'
+        recurse: yes
+    
+    # 注意：假设配置目录已存在
+    # E2E 测试环境中配置目录应已就位
+    
+    - name: 复制 Alertmanager 配置文件（使用模板）
+      template:
+        src: "{{ playbook_dir }}/../../templates/alertmanager.yml.j2"
+        dest: "{{ alertmanager_dir }}/alertmanager.yml"
+        mode: '0644'
+      register: alertmanager_config
+    
+    - name: 验证 Alertmanager 配置
+      command: >
+        docker run --rm
+        --entrypoint amtool
+        -v {{ alertmanager_dir }}:/etc/alertmanager
+        prom/alertmanager:{{ alertmanager_version }}
+        check-config /etc/alertmanager/alertmanager.yml
+      register: amtool_result
+      failed_when: amtool_result.rc != 0
+      changed_when: false
+    
+    - name: 拉取 Alertmanager Docker 镜像
+      docker_image:
+        name: "prom/alertmanager:{{ alertmanager_version }}"
+        source: pull
+    
+    - name: 停止现有 Alertmanager 容器（如果存在）
+      docker_container:
+        name: alertmanager
+        state: absent
+      ignore_errors: yes
+    
+    - name: 启动 Alertmanager 容器
+      docker_container:
+        name: alertmanager
+        image: "prom/alertmanager:{{ alertmanager_version }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "127.0.0.1:{{ alertmanager_port }}:9093"  # 仅本地访问
+        volumes:
+          - "{{ alertmanager_dir }}/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"
+          - "{{ alertmanager_data_dir }}:/alertmanager"
+        command:
+          - "--config.file=/etc/alertmanager/alertmanager.yml"
+          - "--storage.path=/alertmanager"
+          - "--web.external-url=http://localhost:{{ alertmanager_port }}"
+        labels:
+          com.quants.service: "alertmanager"
+          com.quants.component: "monitoring"
+    
+    - name: 等待 Alertmanager 启动
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/-/healthy"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 20
+      delay: 5
+      ignore_errors: yes
+    
+    - name: 检查 Alertmanager 容器状态（如果健康检查失败）
+      shell: docker inspect alertmanager --format='{{ "{{" }}json .State{{ "}}" }}'
+      register: container_state
+      when: result.failed | default(false)
+      failed_when: false
+    
+    - name: 显示容器状态
+      debug:
+        var: container_state.stdout
+      when: result.failed | default(false)
+    
+    - name: 获取 Alertmanager 容器日志（如果健康检查失败）
+      command: docker logs alertmanager --tail 100
+      register: container_logs
+      when: result.failed | default(false)
+      failed_when: false
+    
+    - name: 显示 Alertmanager 日志
+      debug:
+        var: container_logs.stdout_lines
+      when: result.failed | default(false)
+    
+    - name: 确认健康检查成功
+      fail:
+        msg: "Alertmanager 健康检查失败。请查看上方的容器状态和日志。"
+      when: result.failed | default(false)
+    
+    - name: 显示部署信息
+      debug:
+        msg:
+          - "✅ Alertmanager 部署成功"
+          - "版本: {{ alertmanager_version }}"
+          - "配置文件: {{ alertmanager_dir }}/alertmanager.yml"
+          - "访问地址: http://localhost:{{ alertmanager_port }}"
+          - "{% if telegram_bot_token %}Telegram 通知: 已配置{% else %}Telegram 通知: 未配置{% endif %}"
+

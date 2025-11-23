@@ -1,0 +1,142 @@
+---
+# 部署 Grafana 可视化平台
+# 基于 quants-lab/docker-compose.monitoring.yml 转换而来
+
+- name: 部署 Grafana
+  hosts: all
+  become: yes
+  vars:
+    grafana_version: "10.2.2"
+    grafana_dir: /opt/grafana
+    grafana_data_dir: /var/lib/grafana
+    grafana_port: 3000
+    grafana_admin_user: "admin"
+    grafana_admin_password: "admin123"
+    
+  tasks:
+    - name: 创建 Grafana 目录
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ grafana_dir }}"
+        - "{{ grafana_dir }}/provisioning"
+        - "{{ grafana_dir }}/provisioning/datasources"
+        - "{{ grafana_dir }}/provisioning/dashboards"
+        - "{{ grafana_data_dir }}"
+    
+    - name: 调整 Grafana 数据目录权限（容器使用 grafana 用户 UID 472）
+      file:
+        path: "{{ grafana_data_dir }}"
+        state: directory
+        owner: 472
+        group: 472
+        mode: '0775'
+        recurse: yes
+    
+    - name: 设置配置目录路径
+      set_fact:
+        config_dir: "{{ playbook_dir }}/../../../config/monitoring"
+    
+    # 注意：假设配置目录已存在
+    # E2E 测试环境中配置目录应已就位
+    
+    - name: 复制 Grafana provisioning 配置（从 infrastructure/config/monitoring）
+      copy:
+        src: "{{ config_dir }}/grafana/provisioning/"
+        dest: "{{ grafana_dir }}/provisioning/"
+        mode: '0644'
+      register: provisioning_copied
+
+    - name: 检查 Grafana dashboards 目录是否存在
+      stat:
+        path: "{{ config_dir }}/grafana/dashboards"
+      register: grafana_dashboards_dir
+
+    - name: 复制 Grafana dashboards（从 infrastructure/config/monitoring，如果存在）
+      copy:
+        src: "{{ config_dir }}/grafana/dashboards/"
+        dest: "{{ grafana_dir }}/provisioning/dashboards/"
+        mode: '0644'
+      ignore_errors: yes
+      when: grafana_dashboards_dir.stat.exists
+    
+    - name: 拉取 Grafana Docker 镜像
+      docker_image:
+        name: "grafana/grafana:{{ grafana_version }}"
+        source: pull
+    
+    - name: 停止现有 Grafana 容器（如果存在）
+      docker_container:
+        name: grafana
+        state: absent
+      ignore_errors: yes
+    
+    - name: 启动 Grafana 容器
+      docker_container:
+        name: grafana
+        image: "grafana/grafana:{{ grafana_version }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "127.0.0.1:{{ grafana_port }}:3000"  # 仅本地访问
+        volumes:
+          - "{{ grafana_data_dir }}:/var/lib/grafana"
+          - "{{ grafana_dir }}/provisioning:/etc/grafana/provisioning:ro"
+        env:
+          GF_SECURITY_ADMIN_USER: "{{ grafana_admin_user }}"
+          GF_SECURITY_ADMIN_PASSWORD: "{{ grafana_admin_password }}"
+          GF_USERS_ALLOW_SIGN_UP: "false"
+          GF_SERVER_ROOT_URL: "http://localhost:{{ grafana_port }}"
+          GF_INSTALL_PLUGINS: "redis-datasource"
+        labels:
+          com.quants.service: "grafana"
+          com.quants.component: "monitoring"
+    
+    - name: 等待 Grafana 启动
+      uri:
+        url: "http://localhost:{{ grafana_port }}/api/health"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 20
+      delay: 5
+      ignore_errors: yes
+    
+    - name: 检查 Grafana 容器状态（如果健康检查失败）
+      shell: docker inspect grafana --format='{{ "{{" }}json .State{{ "}}" }}'
+      register: container_state
+      when: result.failed | default(false)
+      failed_when: false
+    
+    - name: 显示容器状态
+      debug:
+        var: container_state.stdout
+      when: result.failed | default(false)
+    
+    - name: 获取 Grafana 容器日志（如果健康检查失败）
+      command: docker logs grafana --tail 100
+      register: container_logs
+      when: result.failed | default(false)
+      failed_when: false
+    
+    - name: 显示 Grafana 日志
+      debug:
+        var: container_logs.stdout_lines
+      when: result.failed | default(false)
+    
+    - name: 确认健康检查成功
+      fail:
+        msg: "Grafana 健康检查失败。请查看上方的容器状态和日志。"
+      when: result.failed | default(false)
+    
+    - name: 显示部署信息
+      debug:
+        msg:
+          - "✅ Grafana 部署成功"
+          - "版本: {{ grafana_version }}"
+          - "访问地址: http://localhost:{{ grafana_port }}"
+          - "用户名: {{ grafana_admin_user }}"
+          - "密码: {{ grafana_admin_password }}"
+          - "⚠️  请通过 SSH 隧道访问"

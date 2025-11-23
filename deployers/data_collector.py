@@ -408,6 +408,8 @@ class DataCollectorDeployer(BaseServiceManager):
         """
         配置安全（在服务部署后调整防火墙）
         
+        开放 metrics 端口给监控实例，其他端口保持关闭
+        
         Args:
             host: 目标主机
         
@@ -432,6 +434,14 @@ class DataCollectorDeployer(BaseServiceManager):
             # 调整防火墙以支持数据采集器（data-collector 类型）
             result = security_manager.adjust_firewall_for_service('data-collector')
             
+            # 额外：如果有监控实例 IP，开放 metrics 端口
+            monitor_ip = self.config.get('monitor_ip')
+            if monitor_ip:
+                self.logger.info(f"[{host}] Opening metrics port {self.metrics_port} for monitor {monitor_ip}")
+                firewall_result = self._open_metrics_port_for_monitor(host, monitor_ip)
+                if not firewall_result:
+                    self.logger.warning(f"[{host}] Failed to open metrics port for monitor")
+            
             if result:
                 self.logger.info(f"[{host}] Security configuration completed")
             else:
@@ -441,6 +451,37 @@ class DataCollectorDeployer(BaseServiceManager):
             
         except Exception as e:
             self.logger.error(f"[{host}] Security configuration error: {e}")
+            return False
+    
+    def _open_metrics_port_for_monitor(self, host: str, monitor_ip: str) -> bool:
+        """
+        为监控实例开放 metrics 端口
+        
+        Args:
+            host: 数据采集器主机
+            monitor_ip: 监控实例 IP
+        
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            firewall_config = {
+                'port': self.metrics_port,
+                'protocol': 'tcp',
+                'source_ip': monitor_ip,
+                'description': f'Prometheus metrics for {self.exchange}'
+            }
+            
+            result = self._run_ansible_playbook(
+                'open_firewall_port.yml',
+                [host],
+                firewall_config
+            )
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error opening metrics port: {e}")
             return False
     
     def _check_metrics_endpoint(self, host: str) -> bool:

@@ -1,0 +1,162 @@
+---
+# 部署 Prometheus 监控系统
+# 基于 quants-lab/docker-compose.monitoring.yml 转换而来
+
+- name: 部署 Prometheus
+  hosts: all
+  become: yes
+  vars:
+    prometheus_version: "v2.48.0"
+    prometheus_dir: /opt/prometheus
+    prometheus_data_dir: /var/lib/prometheus
+    prometheus_port: 9090
+    retention_time: "30d"
+    retention_size: "70GB"
+    
+  tasks:
+    - name: 创建 Prometheus 目录
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ prometheus_dir }}"
+        - "{{ prometheus_data_dir }}"
+    
+    - name: 调整 Prometheus 数据目录权限（容器使用 nobody 用户）
+      file:
+        path: "{{ prometheus_data_dir }}"
+        state: directory
+        owner: 65534
+        group: 65534
+        mode: '0775'
+        recurse: yes
+    
+    - name: 设置配置目录路径
+      set_fact:
+        config_dir: "{{ playbook_dir }}/../../../config/monitoring"
+    
+    # 注意：假设配置目录已存在
+    # E2E 测试环境中配置目录应已就位
+    # 生产环境部署前请确保运行: ./scripts/sync_monitoring_configs.sh --copy
+    
+    - name: 复制 Prometheus 配置文件（使用模板）
+      template:
+        src: "{{ playbook_dir }}/../../templates/prometheus.yml.j2"
+        dest: "{{ prometheus_dir }}/prometheus.yml"
+        mode: '0644'
+      register: prometheus_config
+    
+    - name: 复制告警规则文件（从 infrastructure/config/monitoring）
+      copy:
+        src: "{{ config_dir }}/prometheus/alert_rules.yml"
+        dest: "{{ prometheus_dir }}/alert_rules.yml"
+        mode: '0644'
+      register: alert_rules
+    
+    - name: 验证 Prometheus 配置
+      command: >
+        docker run --rm
+        --entrypoint promtool
+        -v {{ prometheus_dir }}:/etc/prometheus
+        prom/prometheus:{{ prometheus_version }}
+        check config /etc/prometheus/prometheus.yml
+      register: promtool_result
+      failed_when: promtool_result.rc != 0
+      changed_when: false
+    
+    - name: 验证告警规则
+      command: >
+        docker run --rm
+        --entrypoint promtool
+        -v {{ prometheus_dir }}:/etc/prometheus
+        prom/prometheus:{{ prometheus_version }}
+        check rules /etc/prometheus/alert_rules.yml
+      register: promtool_rules_result
+      failed_when: promtool_rules_result.rc != 0
+      changed_when: false
+    
+    - name: 拉取 Prometheus Docker 镜像
+      docker_image:
+        name: "prom/prometheus:{{ prometheus_version }}"
+        source: pull
+    
+    - name: 停止现有 Prometheus 容器（如果存在）
+      docker_container:
+        name: prometheus
+        state: absent
+      ignore_errors: yes
+    
+    - name: 启动 Prometheus 容器
+      docker_container:
+        name: prometheus
+        image: "prom/prometheus:{{ prometheus_version }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "127.0.0.1:{{ prometheus_port }}:9090"  # 仅本地访问
+        volumes:
+          - "{{ prometheus_dir }}/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+          - "{{ prometheus_dir }}/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro"
+          - "{{ prometheus_data_dir }}:/prometheus"
+        command:
+          - "--config.file=/etc/prometheus/prometheus.yml"
+          - "--storage.tsdb.path=/prometheus"
+          - "--storage.tsdb.retention.time={{ retention_time }}"
+          - "--storage.tsdb.retention.size={{ retention_size }}"
+          - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+          - "--web.console.templates=/usr/share/prometheus/consoles"
+          - "--web.enable-lifecycle"
+          - "--web.enable-admin-api"
+        labels:
+          com.quants.service: "prometheus"
+          com.quants.component: "monitoring"
+    
+    - name: 等待 Prometheus 启动
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/-/healthy"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 20
+      delay: 5
+      ignore_errors: yes
+    
+    - name: 检查 Prometheus 容器状态（如果健康检查失败）
+      shell: docker inspect prometheus --format='{{ "{{" }}json .State{{ "}}" }}'
+      register: container_state
+      when: result.failed | default(false)
+      failed_when: false
+    
+    - name: 显示容器状态
+      debug:
+        var: container_state.stdout
+      when: result.failed | default(false)
+    
+    - name: 获取 Prometheus 容器日志（如果健康检查失败）
+      command: docker logs prometheus --tail 100
+      register: container_logs
+      when: result.failed | default(false)
+      failed_when: false
+    
+    - name: 显示 Prometheus 日志
+      debug:
+        var: container_logs.stdout_lines
+      when: result.failed | default(false)
+    
+    - name: 确认健康检查成功
+      fail:
+        msg: "Prometheus 健康检查失败。请查看上方的容器状态和日志。"
+      when: result.failed | default(false)
+    
+    - name: 显示部署信息
+      debug:
+        msg:
+          - "✅ Prometheus 部署成功"
+          - "版本: {{ prometheus_version }}"
+          - "配置文件: {{ prometheus_dir }}/prometheus.yml"
+          - "数据目录: {{ prometheus_data_dir }}"
+          - "保留时间: {{ retention_time }}"
+          - "访问地址: http://localhost:{{ prometheus_port }}"
+          - "健康检查: http://localhost:{{ prometheus_port }}/-/healthy"
+

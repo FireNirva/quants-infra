@@ -1,0 +1,93 @@
+# Prometheus 配置文件
+# 由 Ansible 自动生成，基于 quants-lab/config/prometheus/prometheus_multiport.yml
+
+global:
+  scrape_interval: {{ scrape_interval | default('15s') }}
+  evaluation_interval: {{ evaluation_interval | default('15s') }}
+  external_labels:
+    monitor: '{{ monitor_name | default("quants-monitor") }}'
+    environment: '{{ environment | default("production") }}'
+
+# Alertmanager 配置
+{% if alertmanager_url is defined %}
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['{{ alertmanager_url }}']
+{% endif %}
+
+# 告警规则文件
+rule_files:
+  - '/etc/prometheus/alert_rules.yml'
+
+# 抓取配置
+scrape_configs:
+  # Prometheus 自身监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          instance: 'prometheus'
+
+  # Node Exporter 系统指标
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+        labels:
+          instance: '{{ ansible_hostname }}'
+          role: 'monitor'
+
+{% if data_collectors is defined and data_collectors | length > 0 %}
+  # 数据采集器（动态生成）
+{% for collector in data_collectors %}
+  - job_name: 'orderbook-collector-{{ collector.exchange }}'
+    static_configs:
+      - targets: ['{{ collector.ip }}:{{ collector.port }}']
+        labels:
+          collector: '{{ collector.exchange }}'
+          exchange: '{{ collector.exchange }}'
+          instance: '{{ collector.name | default(collector.exchange) }}'
+{% if collector.labels is defined %}
+{% for key, value in collector.labels.items() %}
+          {{ key }}: '{{ value }}'
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% else %}
+  # 数据采集器（示例配置，请使用 add_prometheus_target.yml 动态添加）
+  # - job_name: 'orderbook-collector-gateio'
+  #   static_configs:
+  #     - targets: ['COLLECTOR_IP:8002']
+  #       labels:
+  #         exchange: 'gate_io'
+  #         collector: 'gateio'
+{% endif %}
+
+{% if execution_bots is defined and execution_bots | length > 0 %}
+  # 执行机器人（动态生成）
+{% for bot in execution_bots %}
+  - job_name: 'execution-bot-{{ bot.name }}'
+    static_configs:
+      - targets: ['{{ bot.ip }}:{{ bot.port }}']
+        labels:
+          bot: '{{ bot.name }}'
+          pair: '{{ bot.pair | default("unknown") }}'
+          strategy: '{{ bot.strategy | default("unknown") }}'
+{% endfor %}
+{% endif %}
+
+{% if custom_targets is defined and custom_targets | length > 0 %}
+  # 自定义目标
+{% for target in custom_targets %}
+  - job_name: '{{ target.job_name }}'
+    static_configs:
+      - targets: {{ target.targets | to_json }}
+{% if target.labels is defined %}
+        labels:
+{% for key, value in target.labels.items() %}
+          {{ key }}: '{{ value }}'
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+

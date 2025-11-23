@@ -1,0 +1,159 @@
+# Alertmanager 配置文件
+# 由 Ansible 自动生成，基于 quants-lab/config/alertmanager.yml
+
+global:
+  resolve_timeout: {{ resolve_timeout | default('5m') }}
+  
+{% if smtp_config is defined %}
+  # SMTP 配置（邮件通知）
+  smtp_smarthost: '{{ smtp_config.smarthost | default("smtp.gmail.com:587") }}'
+  smtp_from: '{{ smtp_config.from }}'
+  smtp_auth_username: '{{ smtp_config.username }}'
+  smtp_auth_password: '{{ smtp_config.password }}'
+  smtp_require_tls: {{ smtp_config.require_tls | default(true) | lower }}
+{% endif %}
+
+# 告警路由配置
+route:
+  # 默认接收器
+  receiver: '{{ default_receiver | default("default-receiver") }}'
+  
+  # 分组配置
+  group_by: ['alertname', 'exchange', 'symbol']
+  group_wait: {{ group_wait | default('30s') }}
+  group_interval: {{ group_interval | default('5m') }}
+  repeat_interval: {{ repeat_interval | default('4h') }}
+  
+  # 子路由 - 根据严重程度路由
+  routes:
+    # 严重告警 - 立即通知
+    - receiver: 'critical-alerts'
+      match:
+        severity: critical
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 1h
+      continue: false
+    
+    # 警告告警 - 延迟通知
+    - receiver: 'warning-alerts'
+      match:
+        severity: warning
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 12h
+      continue: false
+    
+    # 连接性告警
+    - receiver: 'connectivity-alerts'
+      match:
+        category: connectivity
+      group_wait: 15s
+      repeat_interval: 2h
+      continue: true
+
+# 接收器配置
+receivers:
+  # 默认接收器
+  - name: 'default-receiver'
+{% if webhook_url is defined %}
+    webhook_configs:
+      - url: '{{ webhook_url }}'
+        send_resolved: true
+{% endif %}
+
+  # 严重告警接收器
+  - name: 'critical-alerts'
+{% if email_to is defined %}
+    email_configs:
+      - to: '{{ email_to }}'
+        headers:
+          Subject: '🚨 [CRITICAL] {% raw %}{{ .GroupLabels.alertname }}{% endraw %}'
+        html: |
+          <h2>严重告警</h2>
+          <p><strong>告警名称:</strong> {% raw %}{{ .GroupLabels.alertname }}{% endraw %}</p>
+          <p><strong>交易所:</strong> {% raw %}{{ .GroupLabels.exchange }}{% endraw %}</p>
+          <p><strong>交易对:</strong> {% raw %}{{ .GroupLabels.symbol }}{% endraw %}</p>
+          <p><strong>描述:</strong> {% raw %}{{ .CommonAnnotations.description }}{% endraw %}</p>
+          <p><strong>时间:</strong> {% raw %}{{ .StartsAt }}{% endraw %}</p>
+        send_resolved: true
+{% endif %}
+    
+{% set telegram_token = telegram_bot_token | default('') | trim %}
+{% set telegram_chat = telegram_chat_id | default('') | trim %}
+{% if telegram_token and telegram_chat %}
+    # Telegram 通知
+    telegram_configs:
+      - bot_token: '{{ telegram_token }}'
+        chat_id: {{ telegram_chat }}
+        message: |
+          🚨 *CRITICAL ALERT*
+          
+          *Alert:* {% raw %}{{ .GroupLabels.alertname }}{% endraw %}
+          *Exchange:* {% raw %}{{ .GroupLabels.exchange }}{% endraw %}
+          *Symbol:* {% raw %}{{ .GroupLabels.symbol }}{% endraw %}
+          *Description:* {% raw %}{{ .CommonAnnotations.description }}{% endraw %}
+          *Started:* {% raw %}{{ .StartsAt }}{% endraw %}
+        parse_mode: 'Markdown'
+        send_resolved: true
+{% endif %}
+    
+{% if slack_webhook_url is defined %}
+    # Slack 通知
+    slack_configs:
+      - api_url: '{{ slack_webhook_url }}'
+        channel: '{{ slack_channel | default("#critical-alerts") }}'
+        title: '🚨 Critical Alert: {% raw %}{{ .GroupLabels.alertname }}{% endraw %}'
+        text: |
+          *Exchange:* {% raw %}{{ .GroupLabels.exchange }}{% endraw %}
+          *Symbol:* {% raw %}{{ .GroupLabels.symbol }}{% endraw %}
+          *Description:* {% raw %}{{ .CommonAnnotations.description }}{% endraw %}
+        send_resolved: true
+{% endif %}
+
+  # 警告告警接收器
+  - name: 'warning-alerts'
+{% if email_to is defined %}
+    email_configs:
+      - to: '{{ email_to }}'
+        headers:
+          Subject: '⚠️ [WARNING] {% raw %}{{ .GroupLabels.alertname }}{% endraw %}'
+        html: |
+          <h2>警告告警</h2>
+          <p><strong>告警名称:</strong> {% raw %}{{ .GroupLabels.alertname }}{% endraw %}</p>
+          <p><strong>交易所:</strong> {% raw %}{{ .GroupLabels.exchange }}{% endraw %}</p>
+          <p><strong>交易对:</strong> {% raw %}{{ .GroupLabels.symbol }}{% endraw %}</p>
+          <p><strong>描述:</strong> {% raw %}{{ .CommonAnnotations.description }}{% endraw %}</p>
+        send_resolved: true
+{% endif %}
+
+  # 连接性告警接收器
+  - name: 'connectivity-alerts'
+{% if webhook_url is defined %}
+    webhook_configs:
+      - url: '{{ webhook_url }}/connectivity'
+        send_resolved: true
+{% endif %}
+
+# 告警抑制规则
+inhibit_rules:
+  # 如果有严重告警，抑制相同来源的警告告警
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['exchange', 'symbol']
+  
+  # 如果WebSocket断开，抑制数据过期告警（因为根本原因是断开）
+  - source_match:
+      alertname: 'WebSocketDisconnected'
+    target_match:
+      alertname: 'DataStale'
+    equal: ['exchange', 'symbol']
+  
+  # 如果数据严重过期，抑制普通过期告警
+  - source_match:
+      alertname: 'DataVeryStale'
+    target_match:
+      alertname: 'DataStale'
+    equal: ['exchange', 'symbol']

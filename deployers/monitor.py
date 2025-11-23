@@ -213,9 +213,47 @@ class MonitorDeployer(BaseServiceManager):
             self.logger.error(f"Error stopping {instance_id}: {e}")
             return False
     
+    def restart(self, instance_id: str) -> bool:
+        """
+        重启监控服务
+        
+        Args:
+            instance_id: 实例 ID 或组件名
+        
+        Returns:
+            bool: 重启是否成功
+        """
+        self.logger.info(f"Restarting monitor component: {instance_id}")
+        
+        try:
+            # 先停止
+            if not self.stop(instance_id):
+                self.logger.error(f"Failed to stop {instance_id}")
+                return False
+            
+            # 等待一小段时间确保服务完全停止
+            import time
+            time.sleep(2)
+            
+            # 再启动
+            if not self.start(instance_id):
+                self.logger.error(f"Failed to start {instance_id}")
+                return False
+            
+            self.logger.info(f"✅ {instance_id} restarted successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error restarting {instance_id}: {e}")
+            return False
+    
     def health_check(self, instance_id: str) -> Dict:
         """
         检查监控服务健康状态
+        
+        注意：由于监控端口绑定到 127.0.0.1，此方法需要：
+        1. 在监控实例本地执行，或
+        2. 通过 SSH 隧道访问 localhost
         
         Args:
             instance_id: 实例 ID
@@ -226,7 +264,9 @@ class MonitorDeployer(BaseServiceManager):
         self.logger.info(f"Checking health of {instance_id}...")
         
         try:
-            host = self.config.get('monitor_host', 'localhost')
+            # 健康检查必须通过 localhost（SSH 隧道或本地执行）
+            # 不能直接访问远程 IP，因为端口绑定到 127.0.0.1
+            host = 'localhost'
             
             # 检查各组件状态
             prometheus_healthy = self._check_prometheus_health(host)
@@ -253,10 +293,11 @@ class MonitorDeployer(BaseServiceManager):
             
         except Exception as e:
             self.logger.error(f"Health check error: {e}")
+            self.logger.error("提示：健康检查需要 SSH 隧道。请运行: quants-ctl monitor tunnel --host <IP>")
             return {
                 'status': 'unknown',
                 'metrics': {},
-                'message': f'Error: {str(e)}'
+                'message': f'Error: {str(e)}. 需要 SSH 隧道访问监控端口。'
             }
     
     def get_logs(self, instance_id: str, lines: int = 100) -> str:
@@ -309,7 +350,11 @@ class MonitorDeployer(BaseServiceManager):
         self.logger.info(f"Adding Prometheus scrape target: {job_name}")
         
         try:
-            host = self.config.get('monitor_host', 'localhost')
+            # monitor_host 是监控实例的 IP，用于 SSH 连接
+            host = self.config.get('monitor_host')
+            if not host:
+                self.logger.error("monitor_host not configured")
+                return False
             
             config = {
                 'job_name': job_name,
@@ -325,8 +370,7 @@ class MonitorDeployer(BaseServiceManager):
             
             if success:
                 self.logger.info(f"✅ Target {job_name} added successfully")
-                # 重载 Prometheus 配置
-                self._reload_prometheus(host)
+                # 注意：playbook 已经在远程触发了 Prometheus reload，无需重复调用
                 return True
             else:
                 return False
@@ -338,16 +382,59 @@ class MonitorDeployer(BaseServiceManager):
     # 辅助方法
     
     def _setup_docker(self, host: str) -> bool:
-        """设置 Docker"""
-        return self._run_ansible_playbook('setup_docker.yml', [host])
+        """
+        设置 Docker 环境
+        
+        检查 Docker 是否已安装，如未安装则安装并配置
+        """
+        self.logger.info(f"[{host}] Checking Docker installation...")
+        
+        # 运行 setup_docker playbook（会检查并安装 Docker）
+        success = self._run_ansible_playbook('setup_docker.yml', [host])
+        
+        if not success:
+            self.logger.error(f"[{host}] Docker setup failed - 部署无法继续")
+            self.logger.error("请确保：")
+            self.logger.error("  1. 目标主机可通过 SSH 访问")
+            self.logger.error("  2. 用户有 sudo 权限")
+            self.logger.error("  3. setup_docker.yml playbook 存在")
+            return False
+        
+        self.logger.info(f"[{host}] Docker environment ready")
+        return True
     
     def _deploy_prometheus(self, host: str) -> bool:
-        """部署 Prometheus"""
+        """
+        部署 Prometheus
+        
+        注意：初始配置不包含数据采集器目标，需要通过 add_scrape_target() 动态添加。
+        这样设计的原因：
+        1. 部署时可能还没有数据采集器
+        2. 采集器数量和地址是动态的
+        3. 便于后续扩展和修改
+        """
         self.logger.info(f"[{host}] Deploying Prometheus...")
+        
+        # 传递基础配置变量给模板
+        # 注意：data_collectors/execution_bots 初始为空列表
+        # 实际目标通过 add_scrape_target() 动态添加
+        extra_vars = {
+            'prometheus_version': self.prometheus_version,
+            'monitor_name': self.config.get('monitor_name', 'quants-monitor'),
+            'environment': self.config.get('environment', 'production'),
+            'scrape_interval': self.config.get('scrape_interval', '15s'),
+            'evaluation_interval': self.config.get('evaluation_interval', '15s'),
+            'alertmanager_url': f'localhost:{self.ALERTMANAGER_PORT}',
+            # 初始为空，使用默认配置（只监控自身和 node-exporter）
+            'data_collectors': [],
+            'execution_bots': [],
+            'custom_targets': []
+        }
+        
         return self._run_ansible_playbook(
             'setup_prometheus.yml',
             [host],
-            {'prometheus_version': self.prometheus_version}
+            extra_vars
         )
     
     def _deploy_grafana(self, host: str) -> bool:
@@ -400,39 +487,100 @@ class MonitorDeployer(BaseServiceManager):
         )
     
     def _check_prometheus_health(self, host: str) -> bool:
-        """检查 Prometheus 健康"""
+        """
+        检查 Prometheus 健康状态
+        
+        注意：
+        - 如果 host='localhost'，则通过本地访问（需要 SSH 隧道）
+        - 如果 host 是远程 IP，则通过 SSH 执行 curl
+        """
         try:
-            import requests
-            response = requests.get(
-                f'http://{host}:{self.PROMETHEUS_PORT}/-/healthy',
-                timeout=5
-            )
-            return response.ok
-        except:
+            if host == 'localhost':
+                # 通过 SSH 隧道访问
+                import requests
+                response = requests.get(
+                    f'http://localhost:{self.PROMETHEUS_PORT}/-/healthy',
+                    timeout=5
+                )
+                return response.ok
+            else:
+                # 通过 SSH 在远程执行 curl
+                import subprocess
+                ssh_key = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+                ssh_port = self.config.get('ssh_port', 6677)
+                ssh_user = self.config.get('ssh_user', 'ubuntu')
+                
+                cmd = [
+                    'ssh', '-i', os.path.expanduser(ssh_key), '-p', str(ssh_port),
+                    f'{ssh_user}@{host}',
+                    f'curl -s -o /dev/null -w "%{{http_code}}" http://localhost:{self.PROMETHEUS_PORT}/-/healthy'
+                ]
+                
+                result = subprocess.run(cmd, capture_output=True, timeout=10, text=True)
+                return result.stdout.strip() == '200'
+        except Exception as e:
+            self.logger.debug(f"Prometheus health check failed: {e}")
             return False
     
     def _check_grafana_health(self, host: str) -> bool:
-        """检查 Grafana 健康"""
+        """
+        检查 Grafana 健康状态
+        
+        注意：
+        - 如果 host='localhost'，则通过本地访问（需要 SSH 隧道）
+        - 如果 host 是远程 IP，则通过 SSH 执行 curl
+        """
         try:
-            import requests
-            response = requests.get(
-                f'http://{host}:{self.GRAFANA_PORT}/api/health',
-                timeout=5
-            )
-            return response.ok
-        except:
+            if host == 'localhost':
+                # 通过 SSH 隧道访问
+                import requests
+                response = requests.get(
+                    f'http://localhost:{self.GRAFANA_PORT}/api/health',
+                    timeout=5
+                )
+                return response.ok
+            else:
+                # 通过 SSH 在远程执行 curl
+                import subprocess
+                ssh_key = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+                ssh_port = self.config.get('ssh_port', 6677)
+                ssh_user = self.config.get('ssh_user', 'ubuntu')
+                
+                cmd = [
+                    'ssh', '-i', os.path.expanduser(ssh_key), '-p', str(ssh_port),
+                    f'{ssh_user}@{host}',
+                    f'curl -s -o /dev/null -w "%{{http_code}}" http://localhost:{self.GRAFANA_PORT}/api/health'
+                ]
+                
+                result = subprocess.run(cmd, capture_output=True, timeout=10, text=True)
+                return result.stdout.strip() == '200'
+        except Exception as e:
+            self.logger.debug(f"Grafana health check failed: {e}")
             return False
     
     def _reload_prometheus(self, host: str) -> bool:
-        """重载 Prometheus 配置"""
+        """
+        重载 Prometheus 配置
+        
+        注意：Prometheus 绑定到 127.0.0.1，需要通过 SSH 在远程执行或通过隧道访问
+        """
         try:
-            import requests
-            response = requests.post(
-                f'http://{host}:{self.PROMETHEUS_PORT}/-/reload',
-                timeout=5
-            )
-            return response.ok
-        except:
+            # 通过 SSH 在远程执行 curl 命令重载配置
+            import subprocess
+            ssh_key = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+            ssh_port = self.config.get('ssh_port', 6677)
+            ssh_user = self.config.get('ssh_user', 'ubuntu')
+            
+            cmd = [
+                'ssh', '-i', os.path.expanduser(ssh_key), '-p', str(ssh_port),
+                f'{ssh_user}@{host}',
+                f'curl -X POST http://localhost:{self.PROMETHEUS_PORT}/-/reload'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, timeout=10)
+            return result.returncode == 0
+        except Exception as e:
+            self.logger.warning(f"Failed to reload Prometheus: {e}")
             return False
     
     def _configure_security(self, host: str) -> bool:
@@ -482,18 +630,47 @@ class MonitorDeployer(BaseServiceManager):
     ) -> bool:
         """运行 Ansible playbook"""
         try:
+            # 配置 SSH 连接参数
+            ssh_key_path = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+            ssh_user = self.config.get('ssh_user', 'ubuntu')
+            ssh_port = self.config.get('ssh_port', 22)
+            
+            # 展开路径中的 ~
+            import os
+            ssh_key_path = os.path.expanduser(ssh_key_path)
+            
+            # 调试日志
+            self.logger.info(f"[DEBUG] SSH Config: user={ssh_user}, port={ssh_port}, key={ssh_key_path}")
+            self.logger.info(f"[DEBUG] Target hosts: {hosts}")
+            
             inventory = {
                 'all': {
-                    'hosts': {host: {} for host in hosts}
+                    'hosts': {
+                        host: {
+                            'ansible_host': host,
+                            'ansible_user': ssh_user,
+                            'ansible_port': ssh_port,
+                            'ansible_ssh_private_key_file': ssh_key_path,
+                            'ansible_ssh_common_args': '-o StrictHostKeyChecking=no'
+                        } for host in hosts
+                    }
                 }
             }
             
-            # 尝试从 common 目录加载，如果不存在则从 monitor 目录
+            # 调试日志：打印 inventory
+            self.logger.info(f"[DEBUG] Inventory: {inventory}")
+            
+            # 优先从 monitor 目录加载，如果不存在则从 common 目录
             playbook_paths = [
-                f'playbooks/common/{playbook}',
-                f'playbooks/monitor/{playbook}'
+                f'playbooks/monitor/{playbook}',
+                f'playbooks/common/{playbook}'
             ]
             
+            # 调试日志
+            self.logger.info(f"[DEBUG] ansible_dir: {self.ansible_dir}")
+            self.logger.info(f"[DEBUG] playbook_paths: {playbook_paths}")
+            
+            last_error = None
             for playbook_path in playbook_paths:
                 try:
                     result = ansible_runner.run(
@@ -510,15 +687,50 @@ class MonitorDeployer(BaseServiceManager):
                     
                     if result.status == 'successful':
                         return True
+                    elif result.status == 'failed':
+                        # 执行失败，记录错误并继续尝试下一个路径
+                        self.logger.warning(f"Playbook {playbook_path} execution failed, trying next path...")
+                        if result.stdout:
+                            stdout_content = result.stdout.read()
+                            self.logger.debug(f"Stdout: {stdout_content}")
+                            # 检查是否是文件不存在的错误
+                            if 'could not be found' in stdout_content:
+                                continue
+                        last_error = {
+                            'path': playbook_path,
+                            'status': result.status,
+                            'stdout': result.stdout.read() if result.stdout else '',
+                            'stderr': result.stderr.read() if result.stderr else ''
+                        }
+                        # 如果不是文件不存在，说明是真正的执行错误，记录并返回
+                        if last_error['stdout'] and 'could not be found' not in last_error['stdout']:
+                            self.logger.error(f"Playbook {playbook} execution failed")
+                            self.logger.error(f"Status: {result.status}")
+                            self.logger.error(f"Stdout: {last_error['stdout']}")
+                            self.logger.error(f"Stderr: {last_error['stderr']}")
+                            return False
                     
                 except FileNotFoundError:
                     continue
+                except Exception as e:
+                    self.logger.warning(f"Error trying {playbook_path}: {e}, continuing...")
+                    continue
             
-            self.logger.error(f"Playbook {playbook} not found in any location")
+            # 所有路径都失败了
+            if last_error:
+                self.logger.error(f"Playbook {playbook} execution failed")
+                self.logger.error(f"Last error from: {last_error['path']}")
+                self.logger.error(f"Status: {last_error['status']}")
+                self.logger.error(f"Stdout: {last_error['stdout']}")
+                self.logger.error(f"Stderr: {last_error['stderr']}")
+            else:
+                self.logger.error(f"Playbook {playbook} not found in any location")
             return False
             
         except Exception as e:
             self.logger.error(f"Error running playbook {playbook}: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return False
     
     def get_service_name(self) -> str:
