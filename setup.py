@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='quants-infrastructure',
-    version='0.1.0',
+    version='0.2.0',
     description='Unified infrastructure management for quantitative trading systems',
     author='Jonathan.Z',
     packages=find_packages(),

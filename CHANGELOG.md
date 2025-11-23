@@ -5,6 +5,109 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.0] - 2025-11-23
+
+### ✨ 新增
+
+#### 监控系统（Monitor Layer）
+- ✅ 完整的监控栈部署（Prometheus + Grafana + Alertmanager）
+- ✅ MonitorDeployer 部署器
+- ✅ 7 个监控 Ansible playbooks
+- ✅ 动态添加监控目标功能
+- ✅ 健康检查和服务管理
+- ✅ 容器权限自动配置
+
+#### CLI 命令
+- ✅ `quants-ctl monitor deploy` - 部署监控栈
+- ✅ `quants-ctl monitor add-target` - 添加抓取目标
+- ✅ `quants-ctl monitor health` - 健康检查
+- ✅ `quants-ctl monitor logs` - 查看日志
+- ✅ `quants-ctl monitor restart` - 重启服务
+
+#### Docker 管理
+- ✅ DockerManager 容器管理功能
+- ✅ 容器启动、停止、重启
+- ✅ 容器日志查看
+- ✅ 容器状态检查
+
+#### 测试
+- ✅ 完整的测试套件（单元/集成/E2E）
+- ✅ 本地 Docker E2E 测试
+- ✅ AWS E2E 测试（真实环境验证）
+- ✅ 测试覆盖率 > 80%
+
+#### 配置
+- ✅ Prometheus 配置模板和告警规则
+- ✅ Grafana 仪表盘和数据源配置
+- ✅ Alertmanager 告警路由配置
+- ✅ 配置同步脚本
+
+#### 文档
+- ✅ 监控部署指南
+- ✅ E2E 测试指南
+- ✅ AWS E2E 测试成功报告
+- ✅ 16 个修复详细文档
+- ✅ 文档组织结构优化
+
+### 🐛 修复
+
+#### AWS E2E 测试修复（16 个）
+- ✅ Ansible SSH 连接配置
+- ✅ Playbook 路径查找顺序
+- ✅ 错误处理和日志输出
+- ✅ SSH 密钥路径展开
+- ✅ ansible_dir 绝对路径
+- ✅ local_action sudo 问题
+- ✅ 模板路径相对路径问题
+- ✅ promtool/amtool Docker 命令
+- ✅ Ansible 模板递归自引用
+- ✅ 健康检查超时和诊断
+- ✅ Ansible 模板转义语法
+- ✅ **容器数据目录权限**（根本原因）
+- ✅ Dashboard 配置本地检查
+
+#### 核心修复
+- ✅ Prometheus 容器使用 nobody (UID 65534)
+- ✅ Grafana 容器使用 grafana (UID 472)
+- ✅ 数据目录权限自动配置 (0775)
+- ✅ 容器稳定运行，不再崩溃重启
+
+### 📚 文档
+
+#### 新增
+- `docs/MONITORING_DEPLOYMENT_GUIDE.md` - 监控部署指南
+- `docs/README_MONITORING.md` - 监控系统说明
+- `docs/testing/` - 测试文档目录
+- `docs/testing/AWS_E2E_TEST_SUCCESS.md` - E2E 成功报告
+
+#### 归档
+- `docs/archived/e2e-fixes/` - 16 个修复详细文档
+- `docs/archived/MONITORING_IMPLEMENTATION_SUMMARY.md`
+
+### 🧪 测试结果
+
+#### AWS E2E 测试
+- ✅ 测试通过（6分51秒）
+- ✅ Prometheus 部署成功
+- ✅ Grafana 部署成功
+- ✅ Alertmanager 部署成功
+- ✅ 健康检查通过
+- ✅ 21 条告警规则加载成功
+
+#### 生产就绪验证
+- ✅ 容器稳定运行
+- ✅ 健康检查持续通过
+- ✅ 配置文件验证通过
+- ✅ 自动资源清理
+
+### 🎯 重要里程碑
+
+**监控系统现已生产就绪！**
+- 经过 16 次修复和完整的 E2E 测试验证
+- 符合安全最佳实践（非 root 用户运行）
+- 完整的文档和测试覆盖
+- 可以部署到生产环境
+
 ## [0.1.0] - 2025-11-22
 
 ### ✨ 新增
