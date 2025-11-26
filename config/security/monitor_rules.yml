@@ -1,8 +1,8 @@
 # 监控服务安全规则配置
 # 适用于运行 Prometheus、Grafana、Alertmanager 的实例
 
-# SSH 端口（自定义）
-ssh_port: 6677
+# E2E 默认使用 22 端口 SSH 连接
+ssh_port: 22
 
 # WireGuard VPN 端口
 wireguard_port: 51820
@@ -13,12 +13,14 @@ vpn_network: "10.0.0.0/24"
 # 是否记录被拒绝的流量
 log_dropped: false
 
-# 公开访问的端口（监控服务通常不公开暴露）
-public_ports: []
-  # 如果需要从 Internet 访问 Grafana，可以添加：
-  # - port: 3000
-  #   proto: tcp
-  #   comment: "Grafana (HTTPS recommended)"
+# 公开访问的端口（E2E 直接用公网 IP 访问 Prometheus/Grafana）
+public_ports:
+  - port: 9090
+    proto: tcp
+    comment: "Prometheus (E2E public access)"
+  - port: 3000
+    proto: tcp
+    comment: "Grafana (E2E public access)"
 
 # 仅限 VPN 网络访问的端口
 vpn_only_ports:
@@ -64,4 +66,3 @@ monitor_config:
   alertmanager_receivers:
     - telegram
     - email
-

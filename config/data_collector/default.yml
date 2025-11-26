@@ -1,0 +1,111 @@
+# 数据采集器默认配置
+# 用于部署 quants-lab 数据采集服务
+
+data_collector:
+  # GitHub 配置
+  github:
+    repo: "https://github.com/FireNirva/hummingbot-quants-lab.git"
+    branch: "main"
+  
+  # Conda 配置
+  conda:
+    install_dir: "/opt/miniconda3"
+    env_name: "quants-lab"
+  
+  # 部署配置
+  deployment:
+    base_dir: "/opt/quants-lab"
+    data_dir: "/data/orderbook_ticks"
+    logs_dir: "/var/log/quants-lab"
+    user: "ubuntu"
+    group: "ubuntu"
+  
+  # 交易所配置
+  exchanges:
+    gateio:
+      # 交易对列表
+      trading_pairs:
+        - "VIRTUAL-USDT"
+        - "IRON-USDT"
+        - "BNKR-USDT"
+        - "PRO-USDT"
+        - "LMTS-USDT"
+        - "MIGGLES-USDT"
+      
+      # 数据采集参数
+      depth_limit: 100              # 订单簿深度限制
+      snapshot_interval: 300        # 快照间隔（秒）
+      buffer_size: 100              # 缓冲区大小
+      flush_interval: 10.0          # 刷新间隔（秒）
+      gap_warning_threshold: 50     # 间隙警告阈值
+    
+    mexc:
+      # 交易对列表
+      trading_pairs:
+        - "AUKIUSDT"
+        - "SERVUSDT"
+        - "IRONUSDT"
+        - "VIRTUALUSDT"
+      
+      # 数据采集参数
+      depth_limit: 100              # 订单簿深度限制
+      buffer_size: 1000             # 缓冲区大小（MEXC 需要更大）
+      flush_interval: 60            # 刷新间隔（秒）
+      gap_warning_threshold: 100    # 间隙警告阈值
+  
+  # 监控配置
+  monitoring:
+    metrics_port: 8000              # Prometheus 指标端口
+    bind_interface: "vpn"           # 绑定到 VPN IP
+    scrape_interval: "15s"          # Prometheus 抓取间隔
+    
+    # Prometheus 标签
+    default_labels:
+      environment: "production"
+      layer: "data_collection"
+      service: "orderbook_tick_collector"
+  
+  # 网络配置
+  network:
+    vpn_network: "10.0.0.0/24"      # VPN 网络段
+    
+    # 防火墙规则
+    firewall:
+      allow_vpn_metrics: true       # 允许 VPN 网络访问 metrics 端口
+      deny_public_metrics: true     # 拒绝公网访问 metrics 端口
+  
+  # Systemd 配置
+  systemd:
+    restart_policy: "always"        # 重启策略
+    restart_sec: 10                 # 重启延迟（秒）
+    start_limit_interval: 0         # 启动限制间隔（0=无限制）
+    
+    # 资源限制
+    limits:
+      nofile: 65536                 # 文件描述符限制
+      nproc: 4096                   # 进程数限制
+  
+  # SSH 配置（用于部署和管理）
+  ssh:
+    key_path: "~/.ssh/lightsail_key.pem"
+    port: 22
+    user: "ubuntu"
+  
+  # 可选：数据库配置（如果需要）
+  database:
+    enabled: false
+    # mongo_uri: "mongodb://admin:admin@localhost:27017/quants_lab"
+    # mongo_database: "quants_lab"
+  
+  # 可选：通知配置
+  notification:
+    enabled: false
+    # telegram:
+    #   bot_token: "your_bot_token"
+    #   chat_id: "your_chat_id"
+  
+  # 环境变量
+  environment:
+    ENVIRONMENT: "production"
+    PYTHONUNBUFFERED: "1"
+

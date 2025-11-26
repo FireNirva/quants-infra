@@ -1,0 +1,70 @@
+# 数据采集器安全规则配置
+# 用于配置数据采集服务的防火墙规则
+
+# 服务类型
+service_type: data_collector
+
+# 开放端口规则
+open_ports:
+  # Metrics 端口 - 仅允许 VPN 网络访问
+  - port: 8000
+    protocol: tcp
+    description: "Prometheus Metrics"
+    allowed_sources:
+      - "{{ vpn_network }}"  # VPN 网络
+    deny_public: true
+
+# 防火墙规则
+firewall_rules:
+  # 允许 VPN 网络访问 metrics 端口
+  - chain: INPUT
+    protocol: tcp
+    destination_port: 8000
+    source: "{{ vpn_network }}"
+    action: ACCEPT
+    comment: "Allow VPN access to metrics"
+  
+  # 拒绝公网访问 metrics 端口
+  - chain: INPUT
+    protocol: tcp
+    destination_port: 8000
+    action: DROP
+    comment: "Deny public access to metrics"
+  
+  # 允许 VPN 网络内的通信
+  - chain: INPUT
+    protocol: all
+    source: "{{ vpn_network }}"
+    action: ACCEPT
+    comment: "Allow VPN network"
+  
+  - chain: OUTPUT
+    protocol: all
+    destination: "{{ vpn_network }}"
+    action: ACCEPT
+    comment: "Allow outbound to VPN network"
+
+# 安全配置
+security_config:
+  # 日志记录
+  log_dropped_packets: false
+  log_accepted_packets: false
+  
+  # 速率限制
+  rate_limiting:
+    enabled: true
+    limit: "10/minute"
+    burst: 20
+  
+  # 连接跟踪
+  connection_tracking:
+    enabled: true
+    max_connections: 10000
+
+# iptables 规则模板
+iptables_rules:
+  # 允许 VPN 访问 metrics
+  - "-A INPUT -p tcp -s {{ vpn_network }} --dport 8000 -j ACCEPT -m comment --comment 'Allow VPN to metrics'"
+  # 拒绝其他访问 metrics
+  - "-A INPUT -p tcp --dport 8000 -j DROP -m comment --comment 'Block public metrics access'"
+

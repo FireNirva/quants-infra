@@ -2,7 +2,8 @@
 # 适用于运行数据收集服务的实例
 
 # SSH 端口（自定义）
-ssh_port: 6677
+# E2E 默认使用 22 端口 SSH 连接
+ssh_port: 22
 
 # WireGuard VPN 端口
 wireguard_port: 51820
@@ -43,4 +44,3 @@ collector_config:
   allowed_rpc:
     - "mainnet.base.org"
     - "bsc-dataseed.binance.org"
-
