@@ -112,20 +112,84 @@
         remote_src: yes
       when: promtool_result.rc != 0
     
-    - name: 重载 Prometheus 配置
+    - name: 尝试重载 Prometheus 配置
       uri:
         url: "http://localhost:9090/-/reload"
         method: POST
-        status_code: 200
+        status_code: [200, 202]
+        timeout: 10
       register: reload_result
       failed_when: false
+      ignore_errors: yes
     
-    - name: 如果重载失败，重启 Prometheus 容器
-      docker_container:
-        name: prometheus
-        state: started
-        restart: yes
-      when: reload_result.status != 200
+    - name: 检查 reload 是否成功
+      set_fact:
+        reload_success: "{{ reload_result.status is defined and reload_result.status in [200, 202] }}"
+    
+    - name: 显示 reload 结果
+      debug:
+        msg:
+          - "Reload 状态: {{ reload_result.status | default('未定义') }}"
+          - "Reload 成功: {{ reload_success }}"
+    
+    - name: 等待配置生效（给 Prometheus 时间重新加载）
+      pause:
+        seconds: 3
+      when: reload_success
+    
+    - name: 验证配置是否真的生效（检查 job 是否出现）
+      uri:
+        url: "http://localhost:9090/api/v1/targets"
+        method: GET
+        timeout: 5
+      register: targets_check
+      failed_when: false
+      ignore_errors: yes
+      when: reload_success
+    
+    - name: 解析 targets 并检查新 job 是否存在
+      set_fact:
+        config_actually_applied: "{{ job_name in (targets_check.json.data.activeTargets | map(attribute='labels') | map(attribute='job') | list) }}"
+      when: reload_success and targets_check.status is defined and targets_check.status == 200
+    
+    - name: 显示配置验证结果
+      debug:
+        msg:
+          - "配置是否真的生效: {{ config_actually_applied | default('未检查') }}"
+          - "如果配置未生效，将强制重启 Prometheus 容器"
+      when: reload_success
+    
+    - name: 如果 reload 失败或配置未生效，强制重启 Prometheus 容器
+      command: docker restart prometheus
+      when: not reload_success or (reload_success and not (config_actually_applied | default(false)))
+      register: restart_result
+    
+    - name: 显示重启原因
+      debug:
+        msg: "重启原因: {% if not reload_success %}Reload 失败{% else %}配置未生效（只读挂载问题）{% endif %}"
+      when: not reload_success or (reload_success and not (config_actually_applied | default(false)))
+    
+    - name: 等待 Prometheus 重启完成
+      wait_for:
+        host: localhost
+        port: 9090
+        delay: 5
+        timeout: 60
+      when: not reload_success or (reload_success and not (config_actually_applied | default(false)))
+    
+    - name: 验证 Prometheus 已启动
+      uri:
+        url: "http://localhost:9090/-/healthy"
+        method: GET
+        status_code: 200
+        timeout: 5
+      retries: 12
+      delay: 5
+      when: not reload_success or (reload_success and not (config_actually_applied | default(false)))
+    
+    - name: 确定最终使用的更新方式
+      set_fact:
+        final_update_method: "{% if reload_success and (config_actually_applied | default(false)) %}配置热重载{% else %}容器重启{% endif %}"
     
     - name: 显示添加结果
       debug:
@@ -134,5 +198,8 @@
           - "Job 名称: {{ job_name }}"
           - "目标: {{ targets }}"
           - "标签: {{ labels }}"
-          - "{% if existing_job_index is defined %}已更新现有 job{% else %}已添加新 job{% endif %}"
+          - "{% if job_found %}已更新现有 job{% else %}已添加新 job{% endif %}"
           - "配置备份: prometheus.yml.backup.{{ ansible_date_time.epoch }}"
+          - "更新方式: {{ final_update_method }}"
+          - ""
+          - "💡 提示: {% if final_update_method == '配置热重载' %}新目标将在 30 秒内出现{% else %}新目标将在容器重启后立即出现{% endif %}"

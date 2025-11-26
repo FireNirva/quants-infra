@@ -80,7 +80,7 @@
         state: started
         restart_policy: unless-stopped
         ports:
-          - "127.0.0.1:{{ grafana_port }}:3000"  # 仅本地访问
+          - "{{ grafana_port }}:3000"  # 对外暴露，便于 E2E 访问
         volumes:
           - "{{ grafana_data_dir }}:/var/lib/grafana"
           - "{{ grafana_dir }}/provisioning:/etc/grafana/provisioning:ro"

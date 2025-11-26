@@ -1,0 +1,3 @@
+---
+# Wrapper playbook to reuse the common Docker setup
+- import_playbook: ../common/setup_docker.yml

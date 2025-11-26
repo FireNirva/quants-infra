@@ -16,6 +16,18 @@
           服务类型: {{ service_type }}
           VPN 网络: {{ vpn_network }}
     
+    - name: 安装防火墙持久化工具
+      apt:
+        name:
+          - iptables-persistent
+          - netfilter-persistent
+        state: present
+        update_cache: yes
+      register: persist_install
+      retries: 3
+      delay: 5
+      until: persist_install is success
+    
     - name: 验证服务类型
       assert:
         that:
@@ -24,12 +36,34 @@
         fail_msg: "无效的服务类型: {{ service_type }}"
         success_msg: "服务类型有效: {{ service_type }}"
     
+    - name: 创建防火墙备份目录
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: 确保 iptables 目录存在
+      file:
+        path: "{{ iptables_rules_file | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: 检查现有防火墙规则文件
+      stat:
+        path: "{{ iptables_rules_file }}"
+      register: iptables_rules_stat
+    
     - name: 备份当前防火墙规则
       copy:
         src: "{{ iptables_rules_file }}"
         dest: "{{ backup_dir }}/rules.v4.before_{{ service_type }}.{{ ansible_date_time.epoch }}"
         remote_src: yes
         mode: '0644'
+      when: iptables_rules_stat.stat.exists
     
     - name: 重新生成防火墙规则（包含服务端口）
       template:
@@ -109,4 +143,3 @@
           {% for port in vpn_only_ports %}
           - {{ port.port }}/{{ port.proto }}: {{ port.comment }}
           {% endfor %}
-

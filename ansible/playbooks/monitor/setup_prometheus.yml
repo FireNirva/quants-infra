@@ -94,10 +94,10 @@
         state: started
         restart_policy: unless-stopped
         ports:
-          - "127.0.0.1:{{ prometheus_port }}:9090"  # 仅本地访问
+          - "{{ prometheus_port }}:9090"  # 监听 0.0.0.0 以便外部健康检查
         volumes:
-          - "{{ prometheus_dir }}/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
-          - "{{ prometheus_dir }}/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro"
+          - "{{ prometheus_dir }}/prometheus.yml:/etc/prometheus/prometheus.yml"
+          - "{{ prometheus_dir }}/alert_rules.yml:/etc/prometheus/alert_rules.yml"
           - "{{ prometheus_data_dir }}:/prometheus"
         command:
           - "--config.file=/etc/prometheus/prometheus.yml"
@@ -159,4 +159,3 @@
           - "保留时间: {{ retention_time }}"
           - "访问地址: http://localhost:{{ prometheus_port }}"
           - "健康检查: http://localhost:{{ prometheus_port }}/-/healthy"
-
