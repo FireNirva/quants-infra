@@ -428,19 +428,22 @@ class SecurityManager:
         Returns:
             Dict: 安全规则配置
         """
+        # 规范化文件名，兼容 data-collector 与 data_collector 两种命名
+        profile_slug = profile.replace('-', '_')
+        
         # 尝试不同的文件名格式
         config_base = Path(__file__).parent.parent / 'config' / 'security'
         
         # 尝试 profile.yml
-        config_path = config_base / f'{profile}.yml'
+        config_path = config_base / f'{profile_slug}.yml'
         if config_path.exists():
             pass  # 使用这个路径
         # 尝试 profile_rules.yml
-        elif (config_base / f'{profile}_rules.yml').exists():
-            config_path = config_base / f'{profile}_rules.yml'
+        elif (config_base / f'{profile_slug}_rules.yml').exists():
+            config_path = config_base / f'{profile_slug}_rules.yml'
         # 如果 profile 已经包含 _rules，尝试不带 _rules 的
-        elif profile.endswith('_rules'):
-            base_profile = profile.replace('_rules', '')
+        elif profile_slug.endswith('_rules'):
+            base_profile = profile_slug.replace('_rules', '')
             if (config_base / f'{base_profile}.yml').exists():
                 config_path = config_base / f'{base_profile}.yml'
             else:
@@ -526,4 +529,3 @@ class SecurityManager:
                 'description': 'SSH'
             }
         ]
-

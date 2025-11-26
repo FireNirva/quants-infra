@@ -15,6 +15,7 @@ from typing import Dict, Optional
 from cli.commands.infra import infra
 from cli.commands.security import security
 from cli.commands.monitor import monitor
+from cli.commands.data_collector import data_collector
 
 
 # 部署器映射
@@ -353,6 +354,7 @@ def _show_status_json(service_filter=None):
 cli.add_command(infra)
 cli.add_command(security)
 cli.add_command(monitor)
+cli.add_command(data_collector)
 
 
 if __name__ == '__main__':

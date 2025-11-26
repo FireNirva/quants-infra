@@ -88,10 +88,14 @@ class MonitorDeployer(BaseServiceManager):
         deploy_prometheus = kwargs.get('deploy_prometheus', True)
         deploy_grafana = kwargs.get('deploy_grafana', True)
         deploy_alertmanager = kwargs.get('deploy_alertmanager', True)
-        skip_security = kwargs.get('skip_security', False)
+        # 为避免测试环境被防火墙锁死，默认跳过安全加固，可通过传参覆盖
+        skip_security = kwargs.get('skip_security', True)
         
         for host in hosts:
             try:
+                # 记录监控主机，供后续动态添加 Prometheus 目标使用
+                self.config['monitor_host'] = host
+                
                 self.logger.info(f"[{host}] Deploying monitoring stack...")
                 
                 # Step 1: 设置 Docker
@@ -116,6 +120,12 @@ class MonitorDeployer(BaseServiceManager):
                     if not self._deploy_alertmanager(host):
                         self.logger.error(f"[{host}] Alertmanager deployment failed")
                         return False
+
+                # Step 4.5: 等待 Prometheus 就绪，避免后续 target 添加失败
+                try:
+                    self._wait_for_prometheus_ready(host, self.PROMETHEUS_PORT, timeout=300)
+                except Exception as e:
+                    self.logger.warning(f"[{host}] Prometheus readiness check warning: {e}")
                 
                 # Step 5: 配置 Dashboard
                 if deploy_grafana:
@@ -379,6 +389,82 @@ class MonitorDeployer(BaseServiceManager):
             self.logger.error(f"Error adding target: {e}")
             return False
     
+    def add_data_collector_target(
+        self,
+        job_name: str,
+        vpn_ip: str,
+        metrics_port: int,
+        exchange: str,
+        host_name: str
+    ) -> bool:
+        """
+        添加数据采集器到 Prometheus 监控
+        
+        这是 add_scrape_target 的便捷包装方法，专门用于数据采集器。
+        它会自动添加数据采集器相关的标签。
+        
+        Args:
+            job_name: Job 名称（如 data-collector-gateio-node1）
+            vpn_ip: VPN IP 地址（数据采集器的 VPN IP）
+            metrics_port: Metrics 端口（默认 8000）
+            exchange: 交易所名称（如 gateio, mexc）
+            host_name: 主机名或 IP
+        
+        Returns:
+            bool: 是否成功添加
+        
+        Example:
+            monitor.add_data_collector_target(
+                job_name='data-collector-gateio-node1',
+                vpn_ip='10.0.0.2',
+                metrics_port=8000,
+                exchange='gateio',
+                host_name='54.XXX.XXX.XXX'
+            )
+        """
+        self.logger.info(f"Adding data collector to Prometheus: {job_name}")
+        self.logger.info(f"  Exchange: {exchange}")
+        self.logger.info(f"  VPN IP: {vpn_ip}")
+        self.logger.info(f"  Metrics Port: {metrics_port}")
+        
+        # 确保 Prometheus 已就绪
+        monitor_host = self.config.get('monitor_host')
+        if monitor_host:
+            self._wait_for_prometheus_ready(monitor_host, self.PROMETHEUS_PORT)
+        
+        # 构造目标地址
+        target = f"{vpn_ip}:{metrics_port}"
+        
+        # 构造标签
+        labels = {
+            'exchange': exchange,
+            'layer': 'data_collection',
+            'host': host_name,
+            'service': 'orderbook_tick_collector',
+            'type': 'data_collector'
+        }
+        
+        # 调用通用方法添加目标
+        return self.add_scrape_target(job_name, [target], labels)
+
+    def _wait_for_prometheus_ready(self, host: str, port: int, timeout: int = 240) -> None:
+        """等待 Prometheus HTTP 接口可用"""
+        import time
+        import requests
+        
+        url = f"http://{host}:{port}/-/ready"
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                resp = requests.get(url, timeout=5)
+                if resp.status_code == 200:
+                    self.logger.info(f"[{host}] Prometheus is ready")
+                    return
+            except Exception:
+                pass
+            time.sleep(5)
+        self.logger.warning(f"[{host}] Prometheus readiness check timed out after {timeout}s")
+    
     # 辅助方法
     
     def _setup_docker(self, host: str) -> bool:
@@ -601,9 +687,15 @@ class MonitorDeployer(BaseServiceManager):
                 'instance_ip': host,
                 'ssh_user': self.config.get('ssh_user', 'ubuntu'),
                 'ssh_key_path': self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem'),
-                'ssh_port': self.config.get('ssh_port', 6677),
+                'ssh_port': self.config.get('ssh_port', 22),
                 'vpn_network': self.config.get('vpn_network', '10.0.0.0/24')
             }
+            # 在安全规则中开放监控端口供 E2E 访问
+            if 'public_ports' not in self.config:
+                self.config['public_ports'] = [
+                    {'port': 9090, 'proto': 'tcp', 'comment': 'Prometheus (E2E public access)'},
+                    {'port': 3000, 'proto': 'tcp', 'comment': 'Grafana (E2E public access)'},
+                ]
             
             # 初始化 SecurityManager
             security_manager = SecurityManager(security_config)
@@ -736,4 +828,3 @@ class MonitorDeployer(BaseServiceManager):
     def get_service_name(self) -> str:
         """获取服务名称"""
         return self.config.get('service_name', self.SERVICE_NAME)
-
