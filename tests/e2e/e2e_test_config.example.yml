@@ -1,0 +1,84 @@
+# Data Collector E2E 测试配置示例
+# 复制此文件为 e2e_test_config.yml 并填入真实值
+
+# AWS 配置
+aws:
+  region: ap-northeast-1
+  access_key_id: ${AWS_ACCESS_KEY_ID}  # 或直接填入
+  secret_access_key: ${AWS_SECRET_ACCESS_KEY}  # 或直接填入
+
+# 实例配置
+instances:
+  # 监控实例
+  monitor:
+    bundle_id: medium_3_0  # small_3_0 | medium_3_0 | large_3_0
+    name_prefix: monitor-dc-e2e
+    vpn_ip: 10.0.0.1
+  
+  # 数据采集实例
+  collector:
+    bundle_id: medium_3_0
+    name_prefix: collector-dc-e2e
+    vpn_ip: 10.0.0.2
+
+# SSH 配置
+ssh:
+  key_name: lightsail-test-key
+  key_path: ~/.ssh/lightsail-test-key.pem
+  user: ubuntu
+  port: 22
+
+# 数据采集器配置
+data_collector:
+  exchange: gateio
+  pairs:
+    - VIRTUAL-USDT
+    - IRON-USDT
+    - BNKR-USDT
+  metrics_port: 8000
+  github_repo: https://github.com/hummingbot/quants-lab.git
+  github_branch: main
+
+# VPN 配置
+vpn:
+  network: 10.0.0.0/24
+
+# 超时配置（秒）
+timeouts:
+  instance_ready: 300      # 实例启动
+  service_start: 120       # 服务启动
+  metrics_ready: 60        # Metrics 就绪
+  prometheus_scrape: 30    # Prometheus 抓取
+
+# 测试配置
+test:
+  cleanup_on_failure: false  # 失败时不清理，便于调试
+  cleanup_on_success: true   # 成功后清理
+  
+  # 长时间运行测试
+  stability_test:
+    duration_minutes: 5
+    check_interval_seconds: 60
+  
+  # 性能阈值
+  performance:
+    max_memory_growth_percent: 50  # 最大内存增长
+    max_cpu_percent: 80            # 最大 CPU 使用率
+
+# 监控配置
+monitoring:
+  grafana:
+    password: Test_Monitor_123!
+  
+  prometheus:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+  
+  alertmanager:
+    enabled: true
+
+# 日志配置
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
