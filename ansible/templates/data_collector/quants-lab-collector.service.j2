@@ -1,0 +1,41 @@
+# systemd 服务文件模板
+# 生成的文件: /etc/systemd/system/quants-lab-{{ exchange }}-collector.service
+
+[Unit]
+Description=Quants-Lab {{ exchange | upper }} Data Collector
+After=network.target
+Documentation=https://github.com/hummingbot/quants-lab
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/quants-lab
+
+# 环境变量
+Environment="PATH=/opt/miniconda3/envs/quants-lab/bin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+Environment="CONDA_DEFAULT_ENV=quants-lab"
+
+# 启动命令（API 端口与 Metrics 端口分离，避免端口冲突）
+ExecStart=/opt/miniconda3/bin/conda run --no-capture-output -n quants-lab python /opt/quants-lab/cli.py serve \
+    --config config/orderbook_tick_{{ exchange }}.yml \
+    --host {{ metrics_bind_host | default('0.0.0.0') }} \
+    --port {{ api_port | default((metrics_port | int) + 500) }}
+
+# 重启策略
+Restart=always
+RestartSec=10
+StartLimitInterval=0
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# 日志
+StandardOutput=append:/var/log/quants-lab/{{ exchange }}-collector.log
+StandardError=append:/var/log/quants-lab/{{ exchange }}-collector-error.log
+SyslogIdentifier=quants-lab-{{ exchange }}-collector
+
+[Install]
+WantedBy=multi-user.target

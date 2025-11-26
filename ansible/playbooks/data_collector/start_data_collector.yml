@@ -1,0 +1,133 @@
+---
+# 启动数据采集器
+# 任务：
+# 1. 启动 systemd 服务
+# 2. 等待服务启动
+# 3. 验证服务状态
+# 4. 检查 metrics 端点
+
+- name: 启动数据采集器
+  hosts: all
+  become: yes
+  vars:
+    metrics_check_host: "{{ ((metrics_bind_host | default('0.0.0.0')) not in ['0.0.0.0', '::']) | ternary((metrics_bind_host | default('0.0.0.0')), '127.0.0.1') }}"
+    metrics_display_host: "{{ vpn_ip | default(metrics_check_host) }}"
+  tasks:
+    - name: 启动服务
+      systemd:
+        name: quants-lab-{{ exchange }}-collector
+        state: started
+      register: service_started
+    
+    - name: 等待服务启动
+      wait_for:
+        timeout: 30
+    
+    - name: 检查服务状态
+      systemd:
+        name: quants-lab-{{ exchange }}-collector
+      register: service_status
+      retries: 3
+      delay: 10
+      until: service_status.status.ActiveState == 'active'
+      ignore_errors: yes
+    
+    - name: 捕获服务日志（仅在未就绪时）
+      shell: journalctl -u quants-lab-{{ exchange }}-collector -n 50 --no-pager
+      register: service_logs_precheck
+      changed_when: false
+      when: service_status.status.ActiveState != 'active'
+      failed_when: false
+    
+    - name: 显示服务状态
+      debug:
+        msg:
+          - "服务状态: {{ service_status.status.ActiveState }}"
+          - "运行状态: {{ service_status.status.SubState }}"
+          - "PID: {{ service_status.status.MainPID | default('N/A') }}"
+          - "日志摘要: {{ service_logs_precheck.stdout_lines | default([]) }}"
+
+    - name: 捕获失败时的 systemd 状态
+      command: systemctl status quants-lab-{{ exchange }}-collector -l
+      register: service_status_detail
+      changed_when: false
+      when: service_status is failed or service_status.status.ActiveState != 'active'
+      ignore_errors: yes
+
+    - name: 显示 systemd 详细状态
+      debug:
+        msg: "{{ service_status_detail.stdout_lines | default([]) }}"
+      when: service_status_detail is defined
+
+    - name: 验证服务运行
+      fail:
+        msg: "服务启动失败: {{ service_status.status.ActiveState }}"
+      when: service_status is failed or service_status.status.ActiveState != 'active'
+    
+    - name: 等待 metrics 端点就绪
+      wait_for:
+        host: "{{ metrics_check_host }}"
+        port: "{{ metrics_port }}"
+        timeout: 120
+        delay: 5
+      ignore_errors: yes
+      register: port_check
+    
+    - name: 验证 metrics 端点（如果端口检查成功）
+      uri:
+        url: "http://{{ metrics_check_host }}:{{ metrics_port }}/metrics"
+        return_content: yes
+        status_code: 200
+      register: metrics_response
+      when: port_check is success
+      retries: 3
+      delay: 5
+      until: metrics_response is success
+      ignore_errors: yes
+    
+    - name: 检查 metrics 内容
+      debug:
+        msg: "Metrics 端点可用！"
+      when: metrics_response is defined
+            and metrics_response is not skipped
+            and metrics_response is success
+            and ('content' in metrics_response)
+            and ('orderbook_collector' in metrics_response.content)
+
+    - name: 收集应用日志（stdout）
+      shell: "tail -n 50 /var/log/quants-lab/{{ exchange }}-collector.log || true"
+      register: app_log
+      changed_when: false
+      when: port_check is failed or port_check is undefined
+
+    - name: 收集应用错误日志（stderr）
+      shell: "tail -n 50 /var/log/quants-lab/{{ exchange }}-collector-error.log || true"
+      register: app_error_log
+      changed_when: false
+      when: port_check is failed or port_check is undefined
+
+    - name: 显示应用日志摘要
+      debug:
+        msg:
+          - "stdout log tail:"
+          - "{{ app_log.stdout_lines | default([]) }}"
+          - "stderr log tail:"
+          - "{{ app_error_log.stdout_lines | default([]) }}"
+      when: (app_log is defined) or (app_error_log is defined)
+    
+    - name: 显示日志（最后20行）
+      shell: journalctl -u quants-lab-{{ exchange }}-collector -n 20 --no-pager
+      register: service_logs
+      changed_when: false
+    
+    - name: 显示服务日志
+      debug:
+        msg: "{{ service_logs.stdout_lines }}"
+    
+    - name: 显示完成信息
+      debug:
+        msg:
+          - "✅ 数据采集器启动成功！"
+          - "服务名称: quants-lab-{{ exchange }}-collector"
+          - "Metrics 端点: http://{{ metrics_display_host }}:{{ metrics_port }}/metrics"
+          - "查看日志: journalctl -u quants-lab-{{ exchange }}-collector -f"

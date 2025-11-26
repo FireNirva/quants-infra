@@ -1,0 +1,64 @@
+---
+# 部署数据采集器配置
+# 任务：
+# 1. 生成采集器配置文件
+# 2. 部署到指定位置
+# 3. 验证配置
+
+- name: 部署数据采集器配置
+  hosts: all
+  become: yes
+  tasks:
+    - name: 确保 config 目录存在
+      file:
+        path: /opt/quants-lab/config
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+    
+    - name: 生成配置文件
+      template:
+        src: ../../templates/data_collector/orderbook_tick_collector.yml.j2
+        dest: /opt/quants-lab/config/orderbook_tick_{{ exchange }}.yml
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+      register: config_deployed
+    
+    - name: 显示配置文件路径
+      debug:
+        msg: "配置文件已生成: /opt/quants-lab/config/orderbook_tick_{{ exchange }}.yml"
+    
+    - name: 验证配置文件格式
+      shell: |
+        cd /opt/quants-lab
+        /opt/miniconda3/bin/conda run -n quants-lab python -c "
+        import yaml
+        with open('config/orderbook_tick_{{ exchange }}.yml') as f:
+            config = yaml.safe_load(f)
+        print('配置文件验证通过')
+        print(f'交易所: {config[\"tasks\"][\"orderbook_tick_{{ exchange }}\"][\"config\"][\"connector_name\"]}')
+        print(f'交易对数量: {len(config[\"tasks\"][\"orderbook_tick_{{ exchange }}\"][\"config\"][\"trading_pairs\"])}')
+        "
+      become_user: ubuntu
+      register: config_validate
+      changed_when: false
+    
+    - name: 显示验证结果
+      debug:
+        msg: "{{ config_validate.stdout_lines }}"
+    
+    - name: 创建 .env 文件（如果需要）
+      template:
+        src: ../../templates/data_collector/env.j2
+        dest: /opt/quants-lab/.env
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+      when: create_env_file | default(true)
+    
+    - name: 显示完成信息
+      debug:
+        msg: "配置部署完成！"
+

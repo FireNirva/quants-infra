@@ -1,0 +1,106 @@
+---
+# 设置数据采集器环境
+# 任务：
+# 1. 更新系统包
+# 2. 安装依赖：git, curl, build-essential
+# 3. 下载并安装 Miniconda
+# 4. 配置 conda 初始化
+# 5. 创建目录结构
+# 6. 设置目录权限
+
+- name: 设置数据采集器环境
+  hosts: all
+  become: yes
+  tasks:
+    - name: 更新 apt 缓存
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      register: apt_update
+      retries: 3
+      delay: 5
+      until: apt_update is success
+    
+    - name: 安装系统依赖
+      apt:
+        name:
+          - git
+          - curl
+          - build-essential
+          - libusb-1.0-0
+          - libusb-1.0-0-dev
+          - python3-dev
+          - gcc
+          - g++
+          - make
+        state: present
+      register: apt_install
+      retries: 3
+      delay: 5
+      until: apt_install is success
+    
+    - name: 检查 Miniconda 是否已安装
+      stat:
+        path: /opt/miniconda3/bin/conda
+      register: conda_installed
+    
+    - name: 下载 Miniconda
+      get_url:
+        url: https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+        dest: /tmp/miniconda.sh
+        mode: '0755'
+      when: not conda_installed.stat.exists
+      register: miniconda_download
+      retries: 3
+      delay: 5
+      until: miniconda_download is success
+    
+    - name: 安装 Miniconda
+      shell: /tmp/miniconda.sh -b -p /opt/miniconda3
+      when: not conda_installed.stat.exists
+      register: miniconda_install
+    
+    - name: 清理 Miniconda 安装文件
+      file:
+        path: /tmp/miniconda.sh
+        state: absent
+      when: not conda_installed.stat.exists
+    
+    - name: 初始化 conda for bash
+      shell: /opt/miniconda3/bin/conda init bash
+      when: not conda_installed.stat.exists
+    
+    - name: 初始化 conda for zsh (如果存在)
+      shell: /opt/miniconda3/bin/conda init zsh
+      when: not conda_installed.stat.exists
+      ignore_errors: yes
+    
+    - name: 设置 conda 自动激活为 false
+      shell: /opt/miniconda3/bin/conda config --set auto_activate_base false
+      when: not conda_installed.stat.exists
+    
+    - name: 创建项目目录
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+      loop:
+        - /opt/quants-lab
+        - /data/orderbook_ticks
+        - /var/log/quants-lab
+    
+    - name: 验证 Miniconda 安装
+      command: /opt/miniconda3/bin/conda --version
+      register: conda_version
+      changed_when: false
+    
+    - name: 显示 Conda 版本
+      debug:
+        msg: "Conda version: {{ conda_version.stdout }}"
+    
+    - name: 显示安装完成信息
+      debug:
+        msg: "环境设置完成！Miniconda 已安装到 /opt/miniconda3"
+

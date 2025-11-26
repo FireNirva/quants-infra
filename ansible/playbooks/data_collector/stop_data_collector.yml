@@ -1,0 +1,47 @@
+---
+# 停止数据采集器
+# 任务：
+# 1. 停止 systemd 服务
+# 2. 验证服务已停止
+
+- name: 停止数据采集器
+  hosts: all
+  become: yes
+  tasks:
+    - name: 停止服务
+      systemd:
+        name: quants-lab-{{ exchange }}-collector
+        state: stopped
+      register: service_stopped
+    
+    - name: 等待服务完全停止
+      wait_for:
+        timeout: 10
+    
+    - name: 验证服务已停止
+      systemd:
+        name: quants-lab-{{ exchange }}-collector
+      register: service_status
+    
+    - name: 显示服务状态
+      debug:
+        msg:
+          - "服务状态: {{ service_status.status.ActiveState }}"
+          - "运行状态: {{ service_status.status.SubState }}"
+    
+    - name: 确认停止
+      debug:
+        msg: "✅ 服务已成功停止: quants-lab-{{ exchange }}-collector"
+      when: service_status.status.ActiveState in ['inactive', 'failed']
+    
+    - name: 显示最后的日志（最后30行）
+      shell: journalctl -u quants-lab-{{ exchange }}-collector -n 30 --no-pager
+      register: final_logs
+      changed_when: false
+      ignore_errors: yes
+    
+    - name: 显示停止前的日志
+      debug:
+        msg: "{{ final_logs.stdout_lines }}"
+      when: final_logs is defined and final_logs.stdout_lines is defined
+

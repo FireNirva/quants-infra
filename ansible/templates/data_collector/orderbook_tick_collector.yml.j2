@@ -1,0 +1,37 @@
+# quants-lab 数据采集器配置模板
+# 生成的文件: orderbook_tick_{{ exchange }}.yml
+# 交易所: {{ exchange }}
+
+tasks:
+  orderbook_tick_{{ exchange }}:
+    enabled: true
+    task_class: app.tasks.data_collection.orderbook_tick_collector.OrderBookTickCollector
+    
+    schedule:
+      type: frequency
+      frequency_hours: 24
+      timezone: UTC
+    
+    max_retries: 999
+    retry_delay_seconds: 30
+    
+    config:
+      connector_name: "{{ exchange }}"
+      
+      trading_pairs:
+      {% for pair in trading_pairs %}
+        - "{{ pair }}"
+      {% endfor %}
+      
+      depth_limit: {{ depth_limit | default(100) }}
+      snapshot_interval: {{ snapshot_interval | default(300) }}
+      buffer_size: {{ buffer_size | default(100) }}
+      flush_interval: {{ flush_interval | default(10.0) }}
+      gap_warning_threshold: {{ gap_warning_threshold | default(50) }}
+    
+    tags:
+      - data_collection
+      - orderbook_tick
+      - {{ exchange }}
+      - high_frequency
+

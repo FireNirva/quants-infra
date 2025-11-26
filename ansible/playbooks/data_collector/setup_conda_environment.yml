@@ -1,0 +1,95 @@
+---
+# 设置 conda 环境
+# 任务：
+# 1. 创建 conda 环境
+# 2. 安装依赖
+# 3. 安装 quants-lab 包
+
+- name: 设置 conda 环境
+  hosts: all
+  become: yes
+  become_user: ubuntu
+  tasks:
+    - name: 检查 conda 环境是否存在
+      shell: /opt/miniconda3/bin/conda env list | grep -q quants-lab
+      register: env_exists
+      ignore_errors: yes
+      failed_when: false
+      changed_when: false
+    
+    - name: 显示环境状态
+      debug:
+        msg: "Conda environment exists: {{ env_exists.rc == 0 }}"
+    
+    - name: 删除现有环境（如果需要重新创建）
+      shell: /opt/miniconda3/bin/conda env remove -n quants-lab -y
+      when: env_exists.rc == 0 and (recreate_env | default(false))
+      register: env_remove
+    
+    - name: 接受 Conda TOS (main channel)
+      shell: /opt/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
+      when: env_exists.rc != 0 or (recreate_env | default(false))
+      changed_when: false
+    
+    - name: 接受 Conda TOS (r channel)
+      shell: /opt/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
+      when: env_exists.rc != 0 or (recreate_env | default(false))
+      changed_when: false
+    
+    - name: 创建 conda 环境
+      shell: |
+        cd /opt/quants-lab
+        /opt/miniconda3/bin/conda env create -f environment.yml
+      when: env_exists.rc != 0 or (recreate_env | default(false))
+      register: env_create
+      retries: 2
+      delay: 10
+      until: env_create is success
+
+    - name: 强制覆盖安装依赖（确保缺失的 Flask/Prometheus 客户端安装到 env）
+      shell: |
+        cd /opt/quants-lab
+        /opt/miniconda3/bin/conda run -n quants-lab pip install -e .
+      register: env_update
+      retries: 2
+      delay: 5
+      until: env_update is success
+    
+    - name: 显示环境创建结果
+      debug:
+        msg: "Conda environment created or already exists"
+      when: env_create.changed or (env_exists.rc == 0 and not (recreate_env | default(false)))
+    
+    - name: 安装 quants-lab 包
+      shell: |
+        cd /opt/quants-lab
+        /opt/miniconda3/bin/conda run -n quants-lab pip install -e .
+      register: package_install
+      retries: 2
+      delay: 5
+      until: package_install is success
+    
+    - name: 验证 conda 环境
+      shell: /opt/miniconda3/bin/conda env list | grep quants-lab
+      register: env_verify
+      changed_when: false
+    
+    - name: 显示环境列表
+      debug:
+        msg: "{{ env_verify.stdout }}"
+    
+    - name: 测试 CLI 可用性
+      shell: |
+        cd /opt/quants-lab
+        /opt/miniconda3/bin/conda run -n quants-lab python cli.py --help
+      register: cli_test
+      changed_when: false
+      failed_when: cli_test.rc != 0
+    
+    - name: 显示 CLI 帮助信息（前10行）
+      debug:
+        msg: "{{ cli_test.stdout_lines[:10] }}"
+    
+    - name: 显示完成信息
+      debug:
+        msg: "Conda 环境设置完成！quants-lab 环境已就绪"

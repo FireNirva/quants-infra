@@ -1,0 +1,44 @@
+---
+# 设置 systemd 服务
+# 任务：
+# 1. 创建 systemd 服务文件
+# 2. 重载 systemd
+# 3. 启用服务
+
+- name: 设置 systemd 服务
+  hosts: all
+  become: yes
+  tasks:
+    - name: 创建 systemd 服务文件
+      template:
+        src: ../../templates/data_collector/quants-lab-collector.service.j2
+        dest: /etc/systemd/system/quants-lab-{{ exchange }}-collector.service
+        mode: '0644'
+      register: service_created
+    
+    - name: 显示服务文件路径
+      debug:
+        msg: "服务文件已创建: /etc/systemd/system/quants-lab-{{ exchange }}-collector.service"
+    
+    - name: 重载 systemd
+      systemd:
+        daemon_reload: yes
+    
+    - name: 启用服务（开机自启）
+      systemd:
+        name: quants-lab-{{ exchange }}-collector
+        enabled: yes
+    
+    - name: 验证服务配置
+      command: systemctl cat quants-lab-{{ exchange }}-collector
+      register: service_config
+      changed_when: false
+    
+    - name: 显示服务配置（前20行）
+      debug:
+        msg: "{{ service_config.stdout_lines[:20] }}"
+    
+    - name: 显示完成信息
+      debug:
+        msg: "Systemd 服务配置完成！服务名称: quants-lab-{{ exchange }}-collector"
+

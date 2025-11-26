@@ -1,0 +1,59 @@
+---
+# Clone quants-lab 仓库
+# 任务：
+# 1. Clone/更新 quants-lab 仓库
+# 2. 检出指定分支
+# 3. 设置文件权限
+
+- name: Clone quants-lab 仓库
+  hosts: all
+  become: yes
+  tasks:
+    - name: 确保 /opt/quants-lab 目录存在
+      file:
+        path: /opt/quants-lab
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+    
+    - name: Clone quants-lab 从 GitHub
+      git:
+        repo: "{{ github_repo }}"
+        dest: /opt/quants-lab
+        version: "{{ github_branch | default('main') }}"
+        force: yes
+        update: yes
+      become_user: ubuntu
+      register: git_clone
+      retries: 3
+      delay: 5
+      until: git_clone is success
+    
+    - name: 设置目录权限
+      file:
+        path: /opt/quants-lab
+        owner: ubuntu
+        group: ubuntu
+        recurse: yes
+    
+    - name: 显示 git 仓库信息
+      command: git -C /opt/quants-lab log -1 --oneline
+      become_user: ubuntu
+      register: git_info
+      changed_when: false
+    
+    - name: 显示最新 commit
+      debug:
+        msg: "Latest commit: {{ git_info.stdout }}"
+    
+    - name: 显示当前分支
+      command: git -C /opt/quants-lab branch --show-current
+      become_user: ubuntu
+      register: current_branch
+      changed_when: false
+    
+    - name: 显示分支信息
+      debug:
+        msg: "Current branch: {{ current_branch.stdout }}"
+
