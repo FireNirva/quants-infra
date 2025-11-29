@@ -16,7 +16,7 @@ tasks:
     retry_delay_seconds: 30
     
     config:
-      connector_name: "{{ exchange }}"
+      connector_name: "{% if exchange == 'gateio' %}gate_io{% else %}{{ exchange }}{% endif %}"
       
       trading_pairs:
       {% for pair in trading_pairs %}
