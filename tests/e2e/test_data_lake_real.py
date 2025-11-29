@@ -463,21 +463,22 @@ class TestDataLakeRealE2E:
         测试 2: 配置 Data Lake
         
         步骤：
-        1. 在 Data Lake 实例上安装依赖
-        2. 创建配置文件
-        3. 配置 SSH 密钥以访问 Collector
+        1. 安装系统依赖 (rsync, git, python3)
+        2. 克隆 GitHub 仓库
+        3. 安装 quants-infra
+        4. 创建 Data Lake 配置文件并验证
         """
         print_test_header("测试 2: 配置 Data Lake")
         
         data_lake_ip = data_lake_instance['public_ip']
         collector_ip = collector_instance['public_ip']
         
-        print_step(1, 3, "安装依赖")
+        print_step(1, 4, "安装系统依赖")
         
         install_cmd = """
         sudo apt-get update && \
-        sudo apt-get install -y rsync python3-pip && \
-        pip3 install pyyaml pydantic click
+        sudo apt-get install -y rsync git python3-pip python3-venv && \
+        echo "System dependencies installed"
         """
         
         result = run_ssh_command(
@@ -488,31 +489,98 @@ class TestDataLakeRealE2E:
         )
         
         if result['success']:
-            print_success("依赖安装成功")
+            print_success("系统依赖安装成功")
         else:
-            pytest.fail(f"依赖安装失败: {result['stderr']}")
+            pytest.fail(f"系统依赖安装失败: {result['stderr']}")
         
-        print_step(2, 3, "创建目录结构")
+        print_step(2, 4, "克隆 GitHub 仓库")
         
-        mkdir_cmd = f"""
-        mkdir -p {test_config['data_lake_root']}/checkpoints && \
-        mkdir -p {test_config['data_lake_root']}/data
+        clone_cmd = f"""
+        cd ~ && \
+        rm -rf quants-infra && \
+        git clone {test_config['github_repo']} && \
+        cd quants-infra && \
+        git checkout {test_config['github_branch']} && \
+        echo "Repository cloned successfully"
         """
         
         result = run_ssh_command(
             data_lake_ip,
-            mkdir_cmd,
+            clone_cmd,
+            test_config['ssh_key_path'],
+            timeout=120
+        )
+        
+        if result['success']:
+            print_success(f"GitHub 仓库克隆成功 ({test_config['github_branch']} 分支)")
+        else:
+            pytest.fail(f"GitHub 仓库克隆失败: {result['stderr']}")
+        
+        print_step(3, 4, "安装 quants-infra")
+        
+        setup_cmd = """
+        cd ~/quants-infra && \
+        pip3 install -e . && \
+        quants-infra --version && \
+        echo "quants-infra installed successfully"
+        """
+        
+        result = run_ssh_command(
+            data_lake_ip,
+            setup_cmd,
+            test_config['ssh_key_path'],
+            timeout=180
+        )
+        
+        if result['success']:
+            print("安装输出：")
+            print(result['stdout'])
+            print_success("quants-infra 安装成功")
+        else:
+            pytest.fail(f"quants-infra 安装失败: {result['stderr']}")
+        
+        print_step(4, 4, "配置 Data Lake 环境")
+        
+        # 创建配置文件
+        config_content = f"""data_lake:
+  root_dir: {test_config['data_lake_root']}
+  profiles:
+    cex_ticks:
+      enabled: true
+      source:
+        type: ssh
+        host: {collector_ip}
+        port: 22
+        user: ubuntu
+        ssh_key: ~/.ssh/collector_key.pem
+        remote_root: {test_config['collector_data_root']}
+      local_subdir: data
+      retention_days: 7
+      rsync_args: "-az --partial --inplace"
+"""
+        
+        config_cmd = f"""
+        mkdir -p ~/quants-infra/config && \
+        mkdir -p {test_config['data_lake_root']}/checkpoints && \
+        mkdir -p {test_config['data_lake_root']}/data && \
+        cat > ~/quants-infra/config/data_lake.yml << 'EOF'
+{config_content}EOF
+        echo "Data Lake configuration created"
+        """
+        
+        result = run_ssh_command(
+            data_lake_ip,
+            config_cmd,
             test_config['ssh_key_path']
         )
         
         if result['success']:
-            print_success("目录创建成功")
+            print_success("Data Lake 配置创建成功")
         else:
-            pytest.fail(f"目录创建失败: {result['stderr']}")
+            pytest.fail(f"配置创建失败: {result['stderr']}")
         
-        print_step(3, 3, "配置 SSH 访问")
-        
-        # 复制 SSH 密钥到 Data Lake 实例
+        # 复制 SSH 密钥到 Data Lake 实例（用于访问 Collector）
+        print("配置 SSH 访问...")
         scp_cmd = [
             'scp',
             '-i', test_config['ssh_key_path'],
@@ -531,6 +599,21 @@ class TestDataLakeRealE2E:
         else:
             pytest.fail(f"SSH 密钥复制失败: {result.stderr}")
         
+        # 验证配置
+        print("\n验证 Data Lake 配置...")
+        validate_cmd = "cd ~/quants-infra && quants-infra data-lake validate --config config/data_lake.yml"
+        result = run_ssh_command(
+            data_lake_ip,
+            validate_cmd,
+            test_config['ssh_key_path']
+        )
+        
+        if result['success']:
+            print(result['stdout'])
+            print_success("配置验证通过")
+        else:
+            pytest.fail(f"配置验证失败: {result['stderr']}")
+        
         print("\n✅ 测试 2 通过\n")
     
     def test_03_sync_data(self, test_config, data_lake_instance, collector_instance):
@@ -538,30 +621,28 @@ class TestDataLakeRealE2E:
         测试 3: 同步数据
         
         步骤：
-        1. 执行 rsync 从 Collector 同步数据
-        2. 验证数据同步成功
-        3. 检查文件数量和大小
+        1. 使用 quants-infra data-lake sync 命令同步数据
+        2. 查看 Data Lake 统计信息
+        3. 验证数据文件和完整性
         """
         print_test_header("测试 3: 同步数据")
         
         data_lake_ip = data_lake_instance['public_ip']
         collector_ip = collector_instance['public_ip']
         
-        print_step(1, 3, "执行 rsync 同步")
+        print_step(1, 3, "使用 quants-infra 执行数据同步")
         
-        # 构建 rsync 命令（使用 Data Lake 实例上的 SSH 密钥）
-        rsync_cmd = f"""
-        rsync -avz --partial --inplace \
-            -e "ssh -i ~/.ssh/collector_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-            ubuntu@{collector_ip}:{test_config['collector_data_root']}/ \
-            {test_config['data_lake_root']}/data/
+        # 使用 quants-infra data-lake sync 命令
+        sync_cmd = f"""
+        cd ~/quants-infra && \
+        quants-infra data-lake sync cex_ticks --config config/data_lake.yml
         """
         
-        print("执行同步命令...")
-        print(f"从 {collector_ip} 同步到本地 {test_config['data_lake_root']}/data/")
+        print("执行 Data Lake 同步命令...")
+        print(f"从 Collector ({collector_ip}) 同步到 Data Lake ({data_lake_ip})")
         result = run_ssh_command(
             data_lake_ip,
-            rsync_cmd,
+            sync_cmd,
             test_config['ssh_key_path'],
             timeout=300
         )
@@ -573,9 +654,28 @@ class TestDataLakeRealE2E:
         else:
             pytest.fail(f"数据同步失败: {result['stderr']}")
         
-        print_step(2, 3, "验证同步的数据")
+        print_step(2, 3, "查看 Data Lake 统计信息")
         
-        check_cmd = f"ls -lhR {test_config['data_lake_root']}/data/"
+        stats_cmd = f"""
+        cd ~/quants-infra && \
+        quants-infra data-lake stats cex_ticks --config config/data_lake.yml
+        """
+        
+        result = run_ssh_command(
+            data_lake_ip,
+            stats_cmd,
+            test_config['ssh_key_path']
+        )
+        
+        if result['success']:
+            print("Data Lake 统计信息：")
+            print(result['stdout'])
+            print_success("统计信息获取成功")
+        else:
+            print(f"警告: 统计信息获取失败: {result['stderr']}")
+        
+        # 同时使用 ls 命令验证数据文件
+        check_cmd = f"ls -lhR {test_config['data_lake_root']}/data/ | head -50"
         result = run_ssh_command(
             data_lake_ip,
             check_cmd,
@@ -583,7 +683,7 @@ class TestDataLakeRealE2E:
         )
         
         if result['success']:
-            print("同步后的数据文件：")
+            print("\n同步后的数据文件：")
             print(result['stdout'])
             assert len(result['stdout'].strip()) > 0, "同步后没有数据文件"
             print_success("数据文件验证通过")
