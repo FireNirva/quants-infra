@@ -31,28 +31,28 @@ fi
 
 # 步骤 2: 检查/激活环境
 echo ""
-echo -e "${BLUE}[步骤 2/7]${NC} 检查 quants-infrastructure 环境..."
-if conda env list | grep -q "quants-infrastructure"; then
+echo -e "${BLUE}[步骤 2/7]${NC} 检查 quants-infra 环境..."
+if conda env list | grep -q "quants-infra"; then
     echo -e "${GREEN}✓${NC} 环境已存在"
 else
     echo -e "${YELLOW}⚠${NC} 环境不存在，正在创建..."
     if [ -f "environment.yml" ]; then
         conda env create -f environment.yml
     else
-        conda create -n quants-infrastructure python=3.10 -y
+        conda create -n quants-infra python=3.10 -y
     fi
 fi
 
 echo ""
 echo -e "${YELLOW}请手动激活环境：${NC}"
-echo -e "  ${GREEN}conda activate quants-infrastructure${NC}"
+echo -e "  ${GREEN}conda activate quants-infra${NC}"
 echo ""
 echo -e "然后再次运行此脚本，或直接运行："
 echo -e "  ${GREEN}bash quick_start_e2e.sh --skip-env-check${NC}"
 echo ""
 
 # 检查是否在正确的环境中
-if [ "$CONDA_DEFAULT_ENV" != "quants-infrastructure" ]; then
+if [ "$CONDA_DEFAULT_ENV" != "quants-infra" ]; then
     if [ "$1" != "--skip-env-check" ]; then
         exit 0
     fi
@@ -128,13 +128,13 @@ read -p "请选择 [1-4]: " choice
 
 case $choice in
     1)
-        TEST_CMD="pytest tests/e2e/test_data_collector_comprehensive_e2e.py::TestDataCollectorFullDeployment::test_01_deploy_data_collector -v -s --run-e2e"
+        TEST_CMD="pytest tests/e2e/test_data_collector.py::TestDataCollectorFullDeployment::test_01_deploy_data_collector -v -s --run-e2e"
         ;;
     2)
-        TEST_CMD="pytest tests/e2e/test_data_collector_comprehensive_e2e.py -v -s --run-e2e -k 'not stability'"
+        TEST_CMD="pytest tests/e2e/test_data_collector.py -v -s --run-e2e -k 'not stability'"
         ;;
     3)
-        TEST_CMD="pytest tests/e2e/test_data_collector_comprehensive_e2e.py -v -s --run-e2e"
+        TEST_CMD="pytest tests/e2e/test_data_collector.py -v -s --run-e2e"
         ;;
     4)
         echo ""

@@ -49,28 +49,28 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 echo ""
 
-# 检查 quants-ctl 命令是否存在
-if ! command -v quants-ctl &> /dev/null; then
-    echo -e "${RED}❌ quants-ctl 命令未找到${NC}"
-    echo "请先安装 infrastructure 项目："
-    echo "  cd infrastructure && pip install -e ."
+# 检查 quants-infra 命令是否存在
+if ! command -v quants-infra &> /dev/null; then
+    echo -e "${RED}❌ quants-infra 命令未找到${NC}"
+    echo "请先安装 quants-infra 项目："
+    echo "  cd quants-infra && pip install -e ."
     exit 1
 fi
 
 # 步骤 1: 验证监控节点（可选）
 echo -e "${BLUE}=== 步骤 1/6: 验证监控节点 ===${NC}"
-if quants-ctl monitor health --host $MONITOR_HOST 2>/dev/null; then
+if quants-infra monitor health --host $MONITOR_HOST 2>/dev/null; then
     echo -e "${GREEN}✅ 监控节点运行正常${NC}"
 else
     echo -e "${YELLOW}⚠️  警告: 监控节点健康检查失败，继续部署...${NC}"
-    echo "（如果监控节点尚未部署，请先运行: quants-ctl monitor deploy --host $MONITOR_HOST）"
+    echo "（如果监控节点尚未部署，请先运行: quants-infra monitor deploy --host $MONITOR_HOST）"
 fi
 echo ""
 
 # 步骤 2: 设置 VPN（可选）
 echo -e "${BLUE}=== 步骤 2/6: 设置 VPN ===${NC}"
 echo "如果需要设置 VPN，请运行："
-echo "  quants-ctl vpn setup \\"
+echo "  quants-infra vpn setup \\"
 echo "    --host $COLLECTOR_HOST \\"
 echo "    --vpn-ip $COLLECTOR_VPN_IP \\"
 echo "    --peer-ip $MONITOR_VPN_IP"
@@ -79,7 +79,7 @@ read -p "是否需要设置 VPN? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "设置 VPN..."
-    if quants-ctl vpn setup \
+    if quants-infra vpn setup \
         --host $COLLECTOR_HOST \
         --vpn-ip $COLLECTOR_VPN_IP \
         --peer-ip $MONITOR_VPN_IP; then
@@ -95,7 +95,7 @@ echo ""
 # 步骤 3: 部署数据采集器
 echo -e "${BLUE}=== 步骤 3/6: 部署数据采集器 ===${NC}"
 echo "正在部署 $EXCHANGE 数据采集器到 $COLLECTOR_HOST..."
-if quants-ctl data-collector deploy \
+if quants-infra data-collector deploy \
     --host $COLLECTOR_HOST \
     --vpn-ip $COLLECTOR_VPN_IP \
     --monitor-vpn-ip $MONITOR_VPN_IP \
@@ -115,7 +115,7 @@ echo ""
 echo -e "${BLUE}=== 步骤 4/6: 添加到监控系统 ===${NC}"
 echo "正在添加数据采集器到 Prometheus..."
 JOB_NAME="data-collector-${EXCHANGE}-node1"
-if quants-ctl monitor add-target \
+if quants-infra monitor add-target \
     --job-name $JOB_NAME \
     --target ${COLLECTOR_VPN_IP}:${METRICS_PORT} \
     --labels "exchange=$EXCHANGE,layer=data_collection,host=$COLLECTOR_HOST"; then
@@ -131,7 +131,7 @@ echo "等待服务启动 (30秒)..."
 sleep 30
 
 echo "检查服务状态..."
-if quants-ctl data-collector status \
+if quants-infra data-collector status \
     --host $COLLECTOR_HOST \
     --vpn-ip $COLLECTOR_VPN_IP \
     --exchange $EXCHANGE; then
@@ -166,16 +166,16 @@ echo "  • Collector Metrics: http://${COLLECTOR_VPN_IP}:${METRICS_PORT}/metric
 echo ""
 echo -e "${GREEN}管理命令:${NC}"
 echo "  • 查看日志:"
-echo "    quants-ctl data-collector logs --host $COLLECTOR_HOST --vpn-ip $COLLECTOR_VPN_IP --exchange $EXCHANGE -f"
+echo "    quants-infra data-collector logs --host $COLLECTOR_HOST --vpn-ip $COLLECTOR_VPN_IP --exchange $EXCHANGE -f"
 echo ""
 echo "  • 查看状态:"
-echo "    quants-ctl data-collector status --host $COLLECTOR_HOST --vpn-ip $COLLECTOR_VPN_IP --exchange $EXCHANGE"
+echo "    quants-infra data-collector status --host $COLLECTOR_HOST --vpn-ip $COLLECTOR_VPN_IP --exchange $EXCHANGE"
 echo ""
 echo "  • 重启服务:"
-echo "    quants-ctl data-collector restart --host $COLLECTOR_HOST --vpn-ip $COLLECTOR_VPN_IP --exchange $EXCHANGE"
+echo "    quants-infra data-collector restart --host $COLLECTOR_HOST --vpn-ip $COLLECTOR_VPN_IP --exchange $EXCHANGE"
 echo ""
 echo "  • 更新代码:"
-echo "    quants-ctl data-collector update --host $COLLECTOR_HOST --vpn-ip $COLLECTOR_VPN_IP --exchange $EXCHANGE"
+echo "    quants-infra data-collector update --host $COLLECTOR_HOST --vpn-ip $COLLECTOR_VPN_IP --exchange $EXCHANGE"
 echo ""
 echo -e "${GREEN}数据文件:${NC}"
 echo "  • 数据目录: /data/orderbook_ticks"

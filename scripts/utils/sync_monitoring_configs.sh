@@ -148,7 +148,7 @@ copy_configs() {
 所有监控配置都来源于 `quants-lab` 项目，使用以下脚本同步：
 
 ```bash
-infrastructure/scripts/sync_monitoring_configs.sh
+quants-infra/scripts/sync_monitoring_configs.sh
 ```
 
 ## 目录结构
@@ -173,7 +173,7 @@ config/monitoring/
 
 ```bash
 # 复制最新配置
-cd infrastructure
+cd quants-infra
 ./scripts/sync_monitoring_configs.sh --copy --force
 
 # 或使用软链接（开发环境推荐）

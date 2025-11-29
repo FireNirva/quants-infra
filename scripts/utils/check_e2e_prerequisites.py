@@ -169,7 +169,7 @@ def check_project_structure():
     ]
     
     required_files = [
-        'tests/e2e/test_security_e2e.py',
+        'tests/e2e/test_security.py',
         'core/security_manager.py',
         'ansible/playbooks/security/01_initial_security.yml',
         'config/security/default_rules.yml'
