@@ -29,21 +29,21 @@ pip install -e .
 ### 验证安装
 
 ```bash
-quants-ctl --version
-quants-ctl --help
+quants-infra --version
+quants-infra --help
 ```
 
 ### 第一个部署
 
 ```bash
 # 部署数据采集服务
-quants-ctl deploy --service data-collector --host 3.112.193.45
+quants-infra deploy --service data-collector --host 3.112.193.45
 
 # 查看状态
-quants-ctl status
+quants-infra status
 
 # 查看日志
-quants-ctl logs --service data-collector-1 --lines 100
+quants-infra logs --service data-collector-1 --lines 100
 ```
 
 ---
@@ -86,7 +86,7 @@ quants-ctl logs --service data-collector-1 --lines 100
 #### 基本部署
 
 ```bash
-quants-ctl deploy \
+quants-infra deploy \
   --service data-collector \
   --host 3.112.193.45
 ```
@@ -108,7 +108,7 @@ quants-ctl deploy \
 部署：
 
 ```bash
-quants-ctl deploy \
+quants-infra deploy \
   --service data-collector \
   --host 3.112.193.45 \
   --config data_collector.json
@@ -117,7 +117,7 @@ quants-ctl deploy \
 #### 部署到多个主机
 
 ```bash
-quants-ctl deploy \
+quants-infra deploy \
   --service data-collector \
   --host 3.112.193.45 \
   --host 52.198.147.179 \
@@ -127,7 +127,7 @@ quants-ctl deploy \
 ### 部署 Freqtrade
 
 ```bash
-quants-ctl deploy \
+quants-infra deploy \
   --service freqtrade \
   --host 52.198.147.179 \
   --config freqtrade_config.json
@@ -149,7 +149,7 @@ Freqtrade 配置示例：
 ### 部署监控系统
 
 ```bash
-quants-ctl deploy \
+quants-infra deploy \
   --service monitor \
   --host localhost
 ```
@@ -162,59 +162,59 @@ quants-ctl deploy \
 
 ```bash
 # 查看所有服务
-quants-ctl status
+quants-infra status
 
 # 查看特定服务
-quants-ctl status --service data-collector
+quants-infra status --service data-collector
 
 # JSON 格式输出
-quants-ctl status --format json
+quants-infra status --format json
 ```
 
 ### 查看日志
 
 ```bash
 # 查看最近 100 行日志
-quants-ctl logs --service data-collector-1
+quants-infra logs --service data-collector-1
 
 # 查看最近 500 行
-quants-ctl logs --service data-collector-1 --lines 500
+quants-infra logs --service data-collector-1 --lines 500
 
 # 实时跟踪日志（未完全实现）
-quants-ctl logs --service data-collector-1 --follow
+quants-infra logs --service data-collector-1 --follow
 ```
 
 ### 扩缩容
 
 ```bash
 # 扩容到 3 个实例
-quants-ctl scale --service data-collector --count 3
+quants-infra scale --service data-collector --count 3
 
 # 缩容到 1 个实例
-quants-ctl scale --service data-collector --count 1
+quants-infra scale --service data-collector --count 1
 ```
 
 ### 服务管理
 
 ```bash
 # 启动服务
-quants-ctl manage --service data-collector-1 --action start
+quants-infra manage --service data-collector-1 --action start
 
 # 停止服务
-quants-ctl manage --service data-collector-1 --action stop
+quants-infra manage --service data-collector-1 --action stop
 
 # 重启服务
-quants-ctl manage --service data-collector-1 --action restart
+quants-infra manage --service data-collector-1 --action restart
 ```
 
 ### 销毁服务
 
 ```bash
 # 销毁服务（会确认）
-quants-ctl destroy --service data-collector
+quants-infra destroy --service data-collector
 
 # 强制销毁（跳过确认）
-quants-ctl destroy --service data-collector --force
+quants-infra destroy --service data-collector --force
 ```
 
 ---
@@ -345,13 +345,13 @@ Permission denied
 export LOG_LEVEL=DEBUG
 
 # 运行命令
-quants-ctl deploy --service data-collector --host 3.112.193.45
+quants-infra deploy --service data-collector --host 3.112.193.45
 ```
 
 #### 使用 Dry-run 模式
 
 ```bash
-quants-ctl deploy \
+quants-infra deploy \
   --service data-collector \
   --host 3.112.193.45 \
   --dry-run
@@ -381,17 +381,17 @@ cat ansible/artifacts/latest/stdout
 # 推荐的部署顺序
 
 # 1. 先部署监控系统
-quants-ctl deploy --service monitor --host localhost
+quants-infra deploy --service monitor --host localhost
 
 # 2. 部署数据采集
-quants-ctl deploy --service data-collector --host 3.112.193.45
+quants-infra deploy --service data-collector --host 3.112.193.45
 
 # 3. 验证数据采集正常
-quants-ctl status --service data-collector
-quants-ctl logs --service data-collector-1 --lines 50
+quants-infra status --service data-collector
+quants-infra logs --service data-collector-1 --lines 50
 
 # 4. 部署交易系统
-quants-ctl deploy --service freqtrade --host 52.198.147.179
+quants-infra deploy --service freqtrade --host 52.198.147.179
 
 # 5. 持续监控
 # 访问 Grafana dashboard

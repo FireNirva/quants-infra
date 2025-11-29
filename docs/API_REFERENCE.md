@@ -275,10 +275,10 @@ deployer.add_scrape_target(
 
 ## CLI Commands
 
-### quants-ctl deploy
+### quants-infra deploy
 
 ```bash
-quants-ctl deploy --service <name> --host <ip> [options]
+quants-infra deploy --service <name> --host <ip> [options]
 ```
 
 **选项:**
@@ -290,26 +290,26 @@ quants-ctl deploy --service <name> --host <ip> [options]
 
 **示例:**
 ```bash
-quants-ctl deploy \
+quants-infra deploy \
   --service data-collector \
   --host 3.112.193.45 \
   --config config.json
 ```
 
-### quants-ctl status
+### quants-infra status
 
 ```bash
-quants-ctl status [--service <name>] [--format <format>]
+quants-infra status [--service <name>] [--format <format>]
 ```
 
 **选项:**
 - `--service`: 过滤特定服务
 - `--format`: 输出格式（table | json）
 
-### quants-ctl logs
+### quants-infra logs
 
 ```bash
-quants-ctl logs --service <instance-id> [--lines <n>] [--follow]
+quants-infra logs --service <instance-id> [--lines <n>] [--follow]
 ```
 
 **选项:**
@@ -317,30 +317,30 @@ quants-ctl logs --service <instance-id> [--lines <n>] [--follow]
 - `--lines`: 日志行数（默认 100）
 - `--follow`: 实时跟踪日志
 
-### quants-ctl scale
+### quants-infra scale
 
 ```bash
-quants-ctl scale --service <name> --count <n>
+quants-infra scale --service <name> --count <n>
 ```
 
 **选项:**
 - `--service`: 服务名称（必需）
 - `--count`: 目标实例数量（必需）
 
-### quants-ctl manage
+### quants-infra manage
 
 ```bash
-quants-ctl manage --service <instance-id> --action <action>
+quants-infra manage --service <instance-id> --action <action>
 ```
 
 **选项:**
 - `--service`: 实例 ID（必需）
 - `--action`: 操作（start | stop | restart）（必需）
 
-### quants-ctl destroy
+### quants-infra destroy
 
 ```bash
-quants-ctl destroy --service <name> [--force]
+quants-infra destroy --service <name> [--force]
 ```
 
 **选项:**

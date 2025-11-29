@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='quants-infrastructure',
-    version='0.2.0',
+    name='quants-infra',
+    version='0.3.1',
     description='Unified infrastructure management for quantitative trading systems',
     author='Jonathan.Z',
     packages=find_packages(),
@@ -20,7 +20,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'quants-ctl=cli.main:cli',
+            'quants-infra=cli.main:cli',
         ],
     },
     python_requires='>=3.10',

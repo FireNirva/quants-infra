@@ -14,7 +14,7 @@
 ### 方法 A: 自动化脚本（推荐）
 
 ```bash
-cd infrastructure
+cd quants-infra
 bash scripts/setup_conda.sh
 ```
 
@@ -35,7 +35,7 @@ pip install -e .
 
 ```bash
 # 检查 CLI
-quants-ctl --version
+quants-infra --version
 
 # 检查 Python 导入
 python -c "from core.security_manager import SecurityManager; print('✓ OK')"
@@ -66,7 +66,7 @@ aws lightsail get-instances
 ### 3.1 创建 Lightsail 实例
 
 ```bash
-quants-ctl infra create \
+quants-infra infra create \
   --name my-first-bot \
   --blueprint ubuntu_22_04 \
   --bundle nano_3_0 \
@@ -86,7 +86,7 @@ quants-ctl infra create \
 ### 3.2 获取实例IP
 
 ```bash
-quants-ctl infra info --name my-first-bot --region ap-northeast-1
+quants-infra infra info --name my-first-bot --region ap-northeast-1
 ```
 
 记录输出的 `public_ip`。
@@ -94,7 +94,7 @@ quants-ctl infra info --name my-first-bot --region ap-northeast-1
 ### 3.3 应用安全配置（可选但强烈推荐）
 
 ```bash
-quants-ctl security setup \
+quants-infra security setup \
   --instance-ip <YOUR_IP> \
   --ssh-user ubuntu \
   --ssh-key ~/.ssh/your-key.pem \
@@ -128,18 +128,18 @@ ssh -p 6677 -i ~/.ssh/your-key.pem ubuntu@<YOUR_IP>
 
 ```bash
 # 部署 Freqtrade 交易机器人
-quants-ctl deploy freqtrade \
+quants-infra deploy freqtrade \
   --host <YOUR_IP> \
   --ssh-port 6677 \
   --config config/freqtrade/default.yml
 
 # 部署数据采集器
-quants-ctl deploy data-collector \
+quants-infra deploy data-collector \
   --host <YOUR_IP> \
   --ssh-port 6677
 
 # 部署监控系统
-quants-ctl deploy monitor \
+quants-infra deploy monitor \
   --host <YOUR_IP> \
   --ssh-port 6677
 ```
@@ -148,26 +148,26 @@ quants-ctl deploy monitor \
 
 ```bash
 # 查看所有实例
-quants-ctl infra list --region ap-northeast-1
+quants-infra infra list --region ap-northeast-1
 
 # 停止实例
-quants-ctl infra manage --name my-first-bot --action stop
+quants-infra infra manage --name my-first-bot --action stop
 
 # 启动实例
-quants-ctl infra manage --name my-first-bot --action start
+quants-infra infra manage --name my-first-bot --action start
 
 # 销毁实例（不再使用时）
-quants-ctl infra destroy --name my-first-bot
+quants-infra infra destroy --name my-first-bot
 ```
 
 ### 安全管理
 
 ```bash
 # 验证安全配置
-quants-ctl security verify --instance-ip <YOUR_IP> --ssh-port 6677
+quants-infra security verify --instance-ip <YOUR_IP> --ssh-port 6677
 
 # 查看安全状态
-quants-ctl security status --instance-ip <YOUR_IP> --ssh-port 6677
+quants-infra security status --instance-ip <YOUR_IP> --ssh-port 6677
 
 # 查看防火墙规则
 ssh -p 6677 ubuntu@<YOUR_IP> 'sudo iptables -L INPUT -n -v'
@@ -196,7 +196,7 @@ terraform apply
 
 # 运行测试
 bash scripts/run_tests.sh quick          # 快速测试
-bash scripts/run_step_by_step_tests.sh  # E2E 安全测试
+bash scripts/test/run_debug.sh  # E2E 安全测试
 ```
 
 ## 🆘 常见问题
@@ -226,14 +226,14 @@ aws lightsail get-instances
 
 ```bash
 # 查看实例详情
-quants-ctl infra info --name my-first-bot
+quants-infra infra info --name my-first-bot
 ```
 
 ### Q4: 安全配置失败？
 
 ```bash
 # 查看详细日志
-quants-ctl security setup ... --verbose
+quants-infra security setup ... --verbose
 
 # 手动验证 Ansible
 ansible --version

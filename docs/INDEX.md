@@ -183,7 +183,7 @@ vpn_only_ports:
 
 **测试验证**:
 ```bash
-bash scripts/run_static_ip_tests.sh
+bash scripts/test/run_static_ip.sh
 ```
 
 ---
@@ -218,9 +218,9 @@ bash scripts/run_static_ip_tests.sh
 
 | 命令 | 文档 |
 |------|------|
-| `quants-ctl infra create` | [LIGHTSAIL_GUIDE.md](LIGHTSAIL_GUIDE.md) + [STATIC_IP_GUIDE.md](STATIC_IP_GUIDE.md) |
-| `quants-ctl security setup` | [SECURITY_GUIDE.md](SECURITY_GUIDE.md) |
-| `quants-ctl deploy` | [USER_GUIDE.md](USER_GUIDE.md) |
+| `quants-infra infra create` | [LIGHTSAIL_GUIDE.md](LIGHTSAIL_GUIDE.md) + [STATIC_IP_GUIDE.md](STATIC_IP_GUIDE.md) |
+| `quants-infra security setup` | [SECURITY_GUIDE.md](SECURITY_GUIDE.md) |
+| `quants-infra deploy` | [USER_GUIDE.md](USER_GUIDE.md) |
 
 ---
 

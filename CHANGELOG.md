@@ -195,13 +195,13 @@
   - env.j2 - 环境变量模板
 
 #### CLI 命令
-- ✅ `quants-ctl data-collector deploy` - 部署数据采集器
-- ✅ `quants-ctl data-collector start` - 启动服务
-- ✅ `quants-ctl data-collector stop` - 停止服务
-- ✅ `quants-ctl data-collector restart` - 重启服务
-- ✅ `quants-ctl data-collector status` - 查看状态
-- ✅ `quants-ctl data-collector logs` - 查看日志
-- ✅ `quants-ctl data-collector update` - 更新代码
+- ✅ `quants-infra data-collector deploy` - 部署数据采集器
+- ✅ `quants-infra data-collector start` - 启动服务
+- ✅ `quants-infra data-collector stop` - 停止服务
+- ✅ `quants-infra data-collector restart` - 重启服务
+- ✅ `quants-infra data-collector status` - 查看状态
+- ✅ `quants-infra data-collector logs` - 查看日志
+- ✅ `quants-infra data-collector update` - 更新代码
 
 #### 监控集成
 - ✅ MonitorDeployer.add_data_collector_target() 方法
@@ -287,11 +287,11 @@
 - ✅ 容器权限自动配置
 
 #### CLI 命令
-- ✅ `quants-ctl monitor deploy` - 部署监控栈
-- ✅ `quants-ctl monitor add-target` - 添加抓取目标
-- ✅ `quants-ctl monitor health` - 健康检查
-- ✅ `quants-ctl monitor logs` - 查看日志
-- ✅ `quants-ctl monitor restart` - 重启服务
+- ✅ `quants-infra monitor deploy` - 部署监控栈
+- ✅ `quants-infra monitor add-target` - 添加抓取目标
+- ✅ `quants-infra monitor health` - 健康检查
+- ✅ `quants-infra monitor logs` - 查看日志
+- ✅ `quants-infra monitor restart` - 重启服务
 
 #### Docker 管理
 - ✅ DockerManager 容器管理功能
@@ -387,7 +387,7 @@
 - ✅ SSH 端口自动切换（22 → 6677）
 - ✅ Whitelist防火墙（default DROP模式）
 - ✅ fail2ban 自动防护
-- ✅ 统一 CLI 工具 (`quants-ctl`)
+- ✅ 统一 CLI 工具 (`quants-infra`)
 - ✅ 3个部署器（Freqtrade, DataCollector, Monitor）
 
 #### 基础设施

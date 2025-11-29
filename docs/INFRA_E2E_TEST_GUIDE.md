@@ -2,7 +2,7 @@
 
 ## 📋 测试概述
 
-本测试套件验证 `quants-ctl infra` 命令的完整功能，包括 Lightsail 实例的创建、管理、查询和销毁。
+本测试套件验证 `quants-infra infra` 命令的完整功能，包括 Lightsail 实例的创建、管理、查询和销毁。
 
 ### 测试范围
 
@@ -16,7 +16,7 @@
 | 6 | 启动实例 | 启动已停止的实例 |
 | 7 | 重启实例 | 重启运行中的实例 |
 | 8 | 网络配置 | 验证实例的网络配置 |
-| 9 | CLI 测试 | 测试 `quants-ctl infra` CLI 命令 |
+| 9 | CLI 测试 | 测试 `quants-infra infra` CLI 命令 |
 
 ## 🚀 快速开始
 
@@ -41,7 +41,7 @@ conda activate quants-infra
 
 ```bash
 # 方式 1: 使用测试脚本（推荐）
-bash scripts/run_infra_e2e_tests.sh
+bash scripts/test/run_infra.sh
 
 # 方式 2: 直接使用 pytest
 pytest tests/e2e/test_infra_e2e.py -v -s
@@ -194,7 +194,7 @@ aws sts get-caller-identity
 **解决方案**:
 ```bash
 # 手动清理旧实例
-quants-ctl infra destroy infra-e2e-test
+quants-infra infra destroy infra-e2e-test
 
 # 或使用 AWS CLI
 aws lightsail delete-instance --instance-name infra-e2e-test
@@ -222,11 +222,11 @@ aws lightsail delete-instance --instance-name infra-e2e-test
 aws lightsail get-instances --query "instances[].name"
 
 # 检查测试实例
-quants-ctl infra list | grep -E "(infra-e2e-test|infra-cli-e2e-test)"
+quants-infra infra list | grep -E "(infra-e2e-test|infra-cli-e2e-test)"
 
 # 手动清理（如需要）
-quants-ctl infra destroy infra-e2e-test
-quants-ctl infra destroy infra-cli-e2e-test
+quants-infra infra destroy infra-e2e-test
+quants-infra infra destroy infra-cli-e2e-test
 ```
 
 ### 成本控制
@@ -271,7 +271,7 @@ jobs:
     
     - name: Run Infra E2E Tests
       run: |
-        bash scripts/run_infra_e2e_tests.sh
+        bash scripts/test/run_infra.sh
 ```
 
 ## 🎯 最佳实践

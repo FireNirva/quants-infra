@@ -31,7 +31,7 @@ resource "aws_lightsail_instance" "main" {
       Name        = var.instance_name
       Environment = var.environment
       Service     = var.service_type
-      ManagedBy   = "quants-ctl"
+      ManagedBy   = "quants-infra"
     },
     var.additional_tags
   )

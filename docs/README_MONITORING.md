@@ -4,21 +4,21 @@
 
 ```bash
 # 1. 创建监控实例
-quants-ctl infra create --name monitor-01 --bundle medium_3_0 --use-static-ip
+quants-infra infra create --name monitor-01 --bundle medium_3_0 --use-static-ip
 
 # 2. 配置安全
-export MONITOR_IP=$(quants-ctl infra info --name monitor-01 --field public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
-quants-ctl security setup --instance-ip $MONITOR_IP --profile monitor
+export MONITOR_IP=$(quants-infra infra info --name monitor-01 --field public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+quants-infra security setup --instance-ip $MONITOR_IP --profile monitor
 
 # 3. 部署监控栈
-quants-ctl monitor deploy \
+quants-infra monitor deploy \
   --host $MONITOR_IP \
   --grafana-password 'YourSecurePassword123!' \
   --telegram-token 'YOUR_BOT_TOKEN' \
   --telegram-chat-id 'YOUR_CHAT_ID'
 
 # 4. 建立 SSH 隧道
-quants-ctl monitor tunnel --host $MONITOR_IP
+quants-infra monitor tunnel --host $MONITOR_IP
 
 # 5. 访问 Grafana
 open http://localhost:3000
@@ -30,7 +30,7 @@ open http://localhost:3000
 
 ```bash
 # 添加数据采集器
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job orderbook-collector-gateio \
   --target 1.2.3.4:8002 \
   --labels '{"exchange":"gate_io"}'
@@ -44,13 +44,13 @@ quants-ctl monitor add-target \
 ## 🛠️ CLI 命令速查
 
 ```bash
-quants-ctl monitor deploy --host <IP>         # 部署监控栈
-quants-ctl monitor tunnel --host <IP>         # SSH 隧道
-quants-ctl monitor add-target --job <NAME>    # 添加目标
-quants-ctl monitor status                     # 查看状态
-quants-ctl monitor logs --component <NAME>    # 查看日志
-quants-ctl monitor restart --component <NAME> # 重启组件
-quants-ctl monitor test-alert                 # 测试告警
+quants-infra monitor deploy --host <IP>         # 部署监控栈
+quants-infra monitor tunnel --host <IP>         # SSH 隧道
+quants-infra monitor add-target --job <NAME>    # 添加目标
+quants-infra monitor status                     # 查看状态
+quants-infra monitor logs --component <NAME>    # 查看日志
+quants-infra monitor restart --component <NAME> # 重启组件
+quants-infra monitor test-alert                 # 测试告警
 ```
 
 ## 🏗️ 项目结构

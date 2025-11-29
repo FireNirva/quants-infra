@@ -1,0 +1,190 @@
+# Quants Infrastructure - 生产环境配置示例
+# 
+# 使用方式:
+#   1. 复制此文件: cp production_config.example.yml production_config.yml
+#   2. 填入真实配置值
+#   3. 运行: quants-infra deploy --config production_config.yml
+
+# ============================================
+# 基础设施配置
+# ============================================
+infrastructure:
+  provider: aws_lightsail
+  region: us-east-1
+  
+  # 实例配置
+  instances:
+    - name: data-collector-prod-1
+      blueprint: ubuntu_22_04
+      bundle: medium_2_0  # 生产环境用更高配置
+      availability_zone: us-east-1a
+      use_static_ip: true  # 生产环境必须用静态IP
+      tags:
+        Environment: production
+        Service: data-collector
+        Team: quants
+    
+    - name: monitor-prod-1
+      blueprint: ubuntu_22_04
+      bundle: small_2_0
+      availability_zone: us-east-1b
+      use_static_ip: true
+      tags:
+        Environment: production
+        Service: monitor
+        Team: quants
+
+# ============================================
+# 安全配置
+# ============================================
+security:
+  # SSH 配置
+  ssh:
+    port: 6677  # 非标准端口
+    disable_password_auth: true
+    disable_root_login: true
+    max_auth_tries: 3
+  
+  # 防火墙规则
+  firewall:
+    default_policy: DROP  # 白名单模式
+    
+    # 公开访问端口
+    public_ports:
+      - port: 80
+        protocol: tcp
+        comment: "HTTP"
+      - port: 443
+        protocol: tcp
+        comment: "HTTPS"
+    
+    # VPN 限制端口
+    vpn_only_ports:
+      - port: 8080
+        protocol: tcp
+        comment: "FreqTrade UI"
+      - port: 3000
+        protocol: tcp
+        comment: "Grafana"
+      - port: 9090
+        protocol: tcp
+        comment: "Prometheus"
+  
+  # Fail2ban 配置
+  fail2ban:
+    enabled: true
+    bantime: 3600  # 1小时
+    maxretry: 3
+  
+  # VPN 配置
+  vpn:
+    enabled: true
+    provider: wireguard
+    port: 51820
+    network: 10.0.0.0/24
+    # 客户端配置将自动生成
+
+# ============================================
+# 服务部署配置
+# ============================================
+services:
+  # 数据采集器
+  data_collector:
+    enabled: true
+    target_instance: data-collector-prod-1
+    
+    config:
+      exchange: binance
+      trading_pairs:
+        - BTC/USDT
+        - ETH/USDT
+        - BNB/USDT
+      
+      timeframes:
+        - 1m
+        - 5m
+        - 15m
+        - 1h
+        - 4h
+        - 1d
+      
+      storage:
+        type: postgresql
+        host: localhost
+        port: 5432
+        database: trading_data
+        # 密码通过环境变量设置: POSTGRES_PASSWORD
+      
+      api:
+        rate_limit: 1000
+        retry_count: 3
+  
+  # 监控系统
+  monitor:
+    enabled: true
+    target_instance: monitor-prod-1
+    
+    components:
+      - prometheus
+      - grafana
+      - node_exporter
+      - alertmanager
+    
+    alerting:
+      email: alerts@example.com
+      slack_webhook: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+    
+    retention:
+      prometheus: 30d
+      logs: 90d
+
+# ============================================
+# 备份配置
+# ============================================
+backup:
+  enabled: true
+  
+  schedule:
+    data: "0 2 * * *"  # 每天凌晨2点
+    config: "0 3 * * 0"  # 每周日凌晨3点
+  
+  retention:
+    daily: 7
+    weekly: 4
+    monthly: 12
+  
+  destination:
+    type: s3
+    bucket: quants-backups
+    region: us-east-1
+    # AWS credentials 通过环境变量或 IAM role
+
+# ============================================
+# 通知配置
+# ============================================
+notifications:
+  email:
+    enabled: true
+    smtp_host: smtp.gmail.com
+    smtp_port: 587
+    from: noreply@example.com
+    to:
+      - admin@example.com
+  
+  slack:
+    enabled: true
+    webhook_url: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+    channel: "#quants-alerts"
+
+# ============================================
+# 环境变量（敏感信息）
+# ============================================
+# 这些值不应该直接写在配置文件中
+# 应该通过环境变量或密钥管理服务设置:
+# 
+# export AWS_ACCESS_KEY_ID="your-key"
+# export AWS_SECRET_ACCESS_KEY="your-secret"
+# export POSTGRES_PASSWORD="your-db-password"
+# export BINANCE_API_KEY="your-api-key"
+# export BINANCE_API_SECRET="your-api-secret"
+

@@ -155,7 +155,7 @@ print(f"找到 {len(instances)} 个实例")
 
 **CLI 命令**：
 ```bash
-quants-ctl infra list --region ap-northeast-1
+quants-infra infra list --region ap-northeast-1
 ```
 
 ---
@@ -210,7 +210,7 @@ instance_data = manager.create_instance(
 
 **CLI 命令**：
 ```bash
-quants-ctl infra create \
+quants-infra infra create \
   --name test-instance \
   --blueprint ubuntu_20_04 \
   --bundle nano_3_0 \
@@ -262,7 +262,7 @@ ip = manager.get_instance_ip("test-instance")
 
 **CLI 命令**：
 ```bash
-quants-ctl infra info --name test-instance --region ap-northeast-1
+quants-infra infra info --name test-instance --region ap-northeast-1
 ```
 
 ---
@@ -287,13 +287,13 @@ manager.manage_instance("test-instance", "reboot")
 **CLI 命令**：
 ```bash
 # 停止实例
-quants-ctl infra manage --name test-instance --action stop --region ap-northeast-1
+quants-infra infra manage --name test-instance --action stop --region ap-northeast-1
 
 # 启动实例
-quants-ctl infra manage --name test-instance --action start --region ap-northeast-1
+quants-infra infra manage --name test-instance --action start --region ap-northeast-1
 
 # 重启实例
-quants-ctl infra manage --name test-instance --action reboot --region ap-northeast-1
+quants-infra infra manage --name test-instance --action reboot --region ap-northeast-1
 ```
 
 ---
@@ -386,7 +386,7 @@ manager.release_static_ip("test-instance-ip")
 
 **CLI 命令**：
 ```bash
-quants-ctl infra destroy --name test-instance --region ap-northeast-1
+quants-infra infra destroy --name test-instance --region ap-northeast-1
 ```
 
 ⚠️ **警告**：此操作不可逆！请确认后再执行。
@@ -480,10 +480,10 @@ python tests/test_infrastructure.py  # 不加 --create 参数
 2. **手动清理**：
    ```bash
    # 列出所有实例
-   quants-ctl infra list --region ap-northeast-1
+   quants-infra infra list --region ap-northeast-1
    
    # 删除测试实例
-   quants-ctl infra destroy --name quants-test-xxxxx --region ap-northeast-1
+   quants-infra infra destroy --name quants-test-xxxxx --region ap-northeast-1
    ```
 
 ---

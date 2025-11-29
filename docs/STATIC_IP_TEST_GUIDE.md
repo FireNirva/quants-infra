@@ -20,7 +20,7 @@
 
 ```bash
 # 运行静态 IP 测试（推荐）
-bash scripts/run_static_ip_tests.sh
+bash scripts/test/run_static_ip.sh
 ```
 
 ### 使用 pytest 直接运行
@@ -352,7 +352,7 @@ jobs:
     
     - name: Run Static IP Tests
       run: |
-        bash scripts/run_static_ip_tests.sh
+        bash scripts/test/run_static_ip.sh
 ```
 
 ---

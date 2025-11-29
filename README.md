@@ -13,7 +13,7 @@
 - 🛡️ **企业级安全** - Whitelist防火墙 + SSH加固 (端口6677) + fail2ban防护
 - 📦 **多服务部署** - Freqtrade交易机器人、数据采集、监控系统
 - 🔧 **基础设施即代码** - Terraform + Ansible 自动化
-- 🎯 **统一CLI** - 简单易用的命令行工具 (`quants-ctl`)
+- 🎯 **统一CLI** - 简单易用的命令行工具 (`quants-infra`)
 - 📊 **完整监控** - Prometheus + Grafana + Alertmanager
 - 🧪 **全面测试** - 100% E2E测试通过 (12/12 测试，53 个总测试)
 - 📝 **完整文档** - 用户指南、开发指南、API参考
@@ -27,20 +27,20 @@ conda activate quants-infra
 pip install -e .
 
 # 2. 验证安装
-quants-ctl --version
+quants-infra --version
 
 # 3. 配置AWS凭证
 aws configure
 
 # 4. 创建Lightsail实例（带静态IP）⭐
-quants-ctl infra create \
+quants-infra infra create \
   --name my-bot-01 \
   --bundle nano_3_0 \
   --region ap-northeast-1 \
   --use-static-ip  # IP地址永久不变！
 
 # 5. 应用安全配置
-quants-ctl security setup \
+quants-infra security setup \
   --instance-ip <YOUR_IP> \
   --profile execution
 ```
@@ -74,78 +74,78 @@ quants-ctl security setup \
 
 ```bash
 # 列出实例
-quants-ctl infra list --region ap-northeast-1
+quants-infra infra list --region ap-northeast-1
 
 # 创建实例（带静态IP）⭐
-quants-ctl infra create \
+quants-infra infra create \
   --name bot-01 \
   --bundle nano_3_0 \
   --use-static-ip  # IP 永久不变！
 
 # 查看实例详情
-quants-ctl infra info --name bot-01
+quants-infra infra info --name bot-01
 
 # 管理实例 (start/stop/reboot)
-quants-ctl infra manage --name bot-01 --action stop
+quants-infra infra manage --name bot-01 --action stop
 
 # 销毁实例（自动释放静态IP）
-quants-ctl infra destroy --name bot-01
+quants-infra infra destroy --name bot-01
 ```
 
 ### 安全配置
 
 ```bash
 # 应用安全配置（初始化 + 防火墙 + SSH加固 + fail2ban）
-quants-ctl security setup \
+quants-infra security setup \
   --instance-ip <IP> \
   --profile execution  # 可选: default, data-collector, monitor, execution
 
 # 验证安全配置
-quants-ctl security verify --instance-ip <IP>
+quants-infra security verify --instance-ip <IP>
 
 # 查看安全状态
-quants-ctl security status --instance-ip <IP>
+quants-infra security status --instance-ip <IP>
 ```
 
 ### 服务部署
 
 ```bash
 # 部署 Freqtrade 交易机器人
-quants-ctl deploy --service freqtrade --host <IP>
+quants-infra deploy --service freqtrade --host <IP>
 
 # 部署监控栈 (Prometheus + Grafana + Alertmanager)
-quants-ctl monitor deploy \
+quants-infra monitor deploy \
   --host <MONITOR_IP> \
   --vpn-ip 10.0.0.1
 
 # 部署数据采集器 (quants-lab) ⭐
-quants-ctl data-collector deploy \
+quants-infra data-collector deploy \
   --host <COLLECTOR_IP> \
   --vpn-ip 10.0.0.2 \
   --exchange gateio \
   --pairs VIRTUAL-USDT,IRON-USDT,BNKR-USDT
 
 # 查看服务状态
-quants-ctl data-collector status \
+quants-infra data-collector status \
   --host <COLLECTOR_IP> \
   --vpn-ip 10.0.0.2 \
   --exchange gateio
 
 # 查看服务日志
-quants-ctl data-collector logs \
+quants-infra data-collector logs \
   --host <COLLECTOR_IP> \
   --vpn-ip 10.0.0.2 \
   --exchange gateio \
   --follow
 
 # 重启服务
-quants-ctl data-collector restart \
+quants-infra data-collector restart \
   --host <COLLECTOR_IP> \
   --vpn-ip 10.0.0.2 \
   --exchange gateio
 
 # 更新代码
-quants-ctl data-collector update \
+quants-infra data-collector update \
   --host <COLLECTOR_IP> \
   --vpn-ip 10.0.0.2 \
   --exchange gateio
@@ -154,7 +154,7 @@ quants-ctl data-collector update \
 ## 🏗️ 项目结构
 
 ```
-infrastructure/
+quants-infra/
 ├── README.md                 # 📖 主文档
 ├── QUICK_START.md           # ⚡ 快速开始
 ├── CHANGELOG.md             # 📝 变更日志
@@ -279,29 +279,29 @@ Internet
 
 ```bash
 # 快速测试（单元+集成，无AWS，0费用，~2分钟）
-bash scripts/run_comprehensive_tests.sh quick
+bash scripts/test/run_comprehensive_tests.sh quick
 ```
 
 ### 按类型测试
 
 ```bash
 # 单元测试（~30秒）
-bash scripts/run_comprehensive_tests.sh unit
+bash scripts/test/run_comprehensive_tests.sh unit
 
 # 集成测试（~1分钟）
-bash scripts/run_comprehensive_tests.sh integration
+bash scripts/test/run_comprehensive_tests.sh integration
 
 # E2E 安全测试（需AWS，有费用，~10分钟）
-bash scripts/run_step_by_step_tests.sh
+bash scripts/test/run_debug.sh
 
 # E2E 基础设施测试（~4分钟）
-bash scripts/run_infra_e2e_tests.sh
+bash scripts/test/run_infra.sh
 
 # 静态 IP 功能测试（~3分钟）⭐
-bash scripts/run_static_ip_tests.sh
+bash scripts/test/run_static_ip.sh
 
 # 完整测试（全部测试，~20分钟）
-bash scripts/run_comprehensive_tests.sh all
+bash scripts/test/run_comprehensive_tests.sh all
 ```
 
 ### 测试覆盖率
@@ -338,21 +338,21 @@ open htmlcov/index.html
 
 ```bash
 # 1. 创建生产实例（带静态IP）⭐
-quants-ctl infra create \
+quants-infra infra create \
   --name prod-execution-01 \
   --bundle small_3_0 \
   --region ap-northeast-1 \
   --use-static-ip  # IP 永久不变，适合生产环境！
 
 # 2. 应用安全配置
-quants-ctl security setup \
+quants-infra security setup \
   --instance-ip <STATIC_IP> \
   --ssh-user ubuntu \
   --ssh-key ~/.ssh/mykey.pem \
   --profile execution
 
 # 3. 验证安全配置
-quants-ctl security verify \
+quants-infra security verify \
   --instance-ip <STATIC_IP> \
   --ssh-port 6677
 
@@ -364,7 +364,7 @@ quants-ctl security verify \
 ssh -p 6677 -i ~/.ssh/mykey.pem ubuntu@<STATIC_IP>
 
 # 6. 部署交易机器人
-quants-ctl deploy freqtrade \
+quants-infra deploy freqtrade \
   --host <STATIC_IP> \
   --ssh-port 6677 \
   --config config/freqtrade/prod.yml

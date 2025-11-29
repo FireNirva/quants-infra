@@ -119,7 +119,7 @@ export EXCHANGE=gateio
 export PAIRS=VIRTUAL-USDT,IRON-USDT,BNKR-USDT
 
 # 2. 运行部署脚本
-cd infrastructure
+cd quants-infra
 bash scripts/deploy_data_collector_full.sh
 ```
 
@@ -140,7 +140,7 @@ bash scripts/deploy_data_collector_full.sh
 如果还未部署监控栈，首先部署：
 
 ```bash
-quants-ctl monitor deploy \
+quants-infra monitor deploy \
   --host 18.183.XXX.XXX \
   --vpn-ip 10.0.0.1
 ```
@@ -148,7 +148,7 @@ quants-ctl monitor deploy \
 验证监控栈健康状态：
 
 ```bash
-quants-ctl monitor health --host 18.183.XXX.XXX
+quants-infra monitor health --host 18.183.XXX.XXX
 ```
 
 ### 步骤 2: 设置 VPN 网络（可选）
@@ -156,7 +156,7 @@ quants-ctl monitor health --host 18.183.XXX.XXX
 为安全通信设置 VPN：
 
 ```bash
-quants-ctl vpn setup \
+quants-infra vpn setup \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --peer-ip 10.0.0.1
@@ -174,7 +174,7 @@ ssh ubuntu@18.183.XXX.XXX "ping -c 3 10.0.0.2"
 使用 CLI 命令部署：
 
 ```bash
-quants-ctl data-collector deploy \
+quants-infra data-collector deploy \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --monitor-vpn-ip 10.0.0.1 \
@@ -221,7 +221,7 @@ quants-ctl data-collector deploy \
 检查服务状态：
 
 ```bash
-quants-ctl data-collector status \
+quants-infra data-collector status \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --exchange gateio
@@ -269,7 +269,7 @@ orderbook_collector_message_processing_latency_bucket{exchange="gate_io",symbol=
 将数据采集器添加到 Prometheus 监控：
 
 ```bash
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job-name data-collector-gateio-node1 \
   --target 10.0.0.2:8000 \
   --labels exchange=gateio,layer=data_collection,host=54.XXX.XXX.XXX
@@ -314,7 +314,7 @@ ssh ubuntu@54.XXX.XXX.XXX "systemctl status quants-lab-gateio-collector"
 
 2. 查看日志：
 ```bash
-quants-ctl data-collector logs \
+quants-infra data-collector logs \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --exchange gateio \
@@ -382,7 +382,7 @@ ssh ubuntu@54.XXX.XXX.XXX "tail -100 /var/log/quants-lab/gateio-collector-error.
 
 3. 检查 WebSocket 连接：
 ```bash
-quants-ctl data-collector logs \
+quants-infra data-collector logs \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --exchange gateio \
@@ -431,7 +431,7 @@ ssh ubuntu@18.183.XXX.XXX "docker logs prometheus"
 实时查看日志：
 
 ```bash
-quants-ctl data-collector logs \
+quants-infra data-collector logs \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --exchange gateio \
@@ -441,7 +441,7 @@ quants-ctl data-collector logs \
 查看最后 N 行：
 
 ```bash
-quants-ctl data-collector logs \
+quants-infra data-collector logs \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --exchange gateio \
@@ -451,7 +451,7 @@ quants-ctl data-collector logs \
 ### 重启服务
 
 ```bash
-quants-ctl data-collector restart \
+quants-infra data-collector restart \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --exchange gateio
@@ -460,7 +460,7 @@ quants-ctl data-collector restart \
 ### 更新代码
 
 ```bash
-quants-ctl data-collector update \
+quants-infra data-collector update \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --exchange gateio
@@ -569,7 +569,7 @@ sudo systemctl restart quants-lab-gateio-collector
 
 ```bash
 # 部署 GateIO
-quants-ctl data-collector deploy \
+quants-infra data-collector deploy \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --exchange gateio \
@@ -577,7 +577,7 @@ quants-ctl data-collector deploy \
   --metrics-port 8000
 
 # 部署 MEXC（不同端口）
-quants-ctl data-collector deploy \
+quants-infra data-collector deploy \
   --host 54.XXX.XXX.XXX \
   --vpn-ip 10.0.0.2 \
   --exchange mexc \

@@ -557,7 +557,7 @@ groups:
 - [ ] 验证所有服务正常运行
 
 **每月审计**:
-- [ ] 运行安全验证 (`quants-ctl security verify`)
+- [ ] 运行安全验证 (`quants-infra security verify`)
 - [ ] 审查用户和权限
 - [ ] 检查系统更新
 - [ ] 验证备份完整性
@@ -700,7 +700,7 @@ INSTANCE_IP=$(aws lightsail get-instance --instance-name ${INSTANCE_NAME}-restor
   | jq -r '.instance.publicIpAddress')
 
 # 4. 重新应用安全配置
-quants-ctl security setup ${INSTANCE_NAME}-restored --profile data-collector
+quants-infra security setup ${INSTANCE_NAME}-restored --profile data-collector
 
 # 5. 恢复配置文件
 aws s3 cp s3://quants-backups/configs/config_${BACKUP_DATE}.tar.gz /tmp/

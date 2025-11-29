@@ -22,7 +22,7 @@
 ```
 ┌─────────────────────┐
 │ 你的 Mac (控制层)    │
-│ quants-ctl CLI      │
+│ quants-infra CLI      │
 └──────────┬──────────┘
            │ SSH/Ansible
            ▼
@@ -52,7 +52,7 @@
 
 - ✅ AWS Lightsail 账号已配置
 - ✅ SSH 密钥已生成（`~/.ssh/lightsail_key.pem`）
-- ✅ 已安装 `quants-ctl` CLI 工具
+- ✅ 已安装 `quants-infra` CLI 工具
 
 ### 2. 资源规格建议
 
@@ -91,7 +91,7 @@ EMAIL_ADDRESS="<你的邮箱>"
 
 ```bash
 # 创建 Lightsail 实例（带静态 IP）
-quants-ctl infra create \
+quants-infra infra create \
   --name monitor-01 \
   --bundle medium_3_0 \
   --region ap-northeast-1 \
@@ -99,10 +99,10 @@ quants-ctl infra create \
 
 # 等待实例启动（约 60-90 秒）
 # 获取实例 IP
-quants-ctl infra info --name monitor-01 --field public_ip
+quants-infra infra info --name monitor-01 --field public_ip
 
 # 保存 IP 到变量
-export MONITOR_IP=$(quants-ctl infra info --name monitor-01 --field public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+export MONITOR_IP=$(quants-infra infra info --name monitor-01 --field public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
 echo "监控实例 IP: $MONITOR_IP"
 ```
 
@@ -110,7 +110,7 @@ echo "监控实例 IP: $MONITOR_IP"
 
 ```bash
 # 应用安全配置（SSH + 防火墙）
-quants-ctl security setup \
+quants-infra security setup \
   --instance-ip $MONITOR_IP \
   --ssh-key ~/.ssh/lightsail_key.pem \
   --ssh-port 6677 \
@@ -125,7 +125,7 @@ ssh -p 6677 -i ~/.ssh/lightsail_key.pem ubuntu@$MONITOR_IP "echo '✅ SSH 连接
 
 ```bash
 # 部署完整监控栈
-quants-ctl monitor deploy \
+quants-infra monitor deploy \
   --host $MONITOR_IP \
   --grafana-password '<你的强密码>' \
   --telegram-token '<你的 Telegram Bot Token>' \
@@ -143,7 +143,7 @@ quants-ctl monitor deploy \
 
 ```bash
 # 方法 1: 使用 CLI 命令（推荐）
-quants-ctl monitor tunnel --host $MONITOR_IP
+quants-infra monitor tunnel --host $MONITOR_IP
 
 # 方法 2: 使用脚本
 ./infrastructure/scripts/tunnel_to_monitor.sh $MONITOR_IP
@@ -181,10 +181,10 @@ open http://localhost:9093
 
 ```bash
 # 检查所有组件状态
-quants-ctl monitor status
+quants-infra monitor status
 
 # 测试告警功能
-quants-ctl monitor test-alert
+quants-infra monitor test-alert
 
 # 预期：收到 Telegram/Email 测试告警
 ```
@@ -201,7 +201,7 @@ quants-ctl monitor test-alert
 # 示例：Gate.io 数据采集器（端口 8002）
 COLLECTOR_IP_GATEIO="1.2.3.4"
 
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job orderbook-collector-gateio \
   --target $COLLECTOR_IP_GATEIO:8002 \
   --labels '{"exchange":"gate_io","region":"ap-northeast-1"}'
@@ -209,7 +209,7 @@ quants-ctl monitor add-target \
 # 示例：MEXC 数据采集器（端口 8001）
 COLLECTOR_IP_MEXC="5.6.7.8"
 
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job orderbook-collector-mexc \
   --target $COLLECTOR_IP_MEXC:8001 \
   --labels '{"exchange":"mexc","region":"ap-northeast-1"}'
@@ -250,7 +250,7 @@ open http://localhost:9090/targets
 
 3. **测试通知**:
    ```bash
-   quants-ctl monitor test-alert
+   quants-infra monitor test-alert
    # 应该收到 Telegram 消息
    ```
 
@@ -263,7 +263,7 @@ open http://localhost:9090/targets
 nano infrastructure/ansible/templates/alertmanager.yml.j2
 
 # 添加 SMTP 配置后重新部署
-quants-ctl monitor deploy \
+quants-infra monitor deploy \
   --host $MONITOR_IP \
   --grafana-password '<密码>' \
   --telegram-token '<token>' \
@@ -279,23 +279,23 @@ quants-ctl monitor deploy \
 
 ```bash
 # Prometheus 日志
-quants-ctl monitor logs --component prometheus --lines 100
+quants-infra monitor logs --component prometheus --lines 100
 
 # Grafana 日志
-quants-ctl monitor logs --component grafana --lines 100
+quants-infra monitor logs --component grafana --lines 100
 
 # Alertmanager 日志
-quants-ctl monitor logs --component alertmanager --lines 100
+quants-infra monitor logs --component alertmanager --lines 100
 ```
 
 ### 重启组件
 
 ```bash
 # 重启单个组件
-quants-ctl monitor restart --component prometheus
+quants-infra monitor restart --component prometheus
 
 # 重启所有组件
-quants-ctl monitor restart --component all
+quants-infra monitor restart --component all
 ```
 
 ### 更新配置
@@ -305,11 +305,11 @@ quants-ctl monitor restart --component all
 # infrastructure/config/monitoring/prometheus/alert_rules.yml
 
 # 2. 重新同步配置
-cd infrastructure
+cd quants-infra
 ./scripts/sync_monitoring_configs.sh --copy --force
 
 # 3. 重新部署（只更新配置，不重建容器）
-quants-ctl monitor deploy \
+quants-infra monitor deploy \
   --host $MONITOR_IP \
   --grafana-password '<密码>' \
   --skip-security
@@ -367,7 +367,7 @@ time() - orderbook_collector_last_message_timestamp
 ps aux | grep "ssh.*3000:localhost:3000"
 
 # 2. 重新建立隧道
-quants-ctl monitor tunnel --host $MONITOR_IP
+quants-infra monitor tunnel --host $MONITOR_IP
 
 # 3. 检查 Grafana 容器状态
 ssh -p 6677 -i ~/.ssh/lightsail_key.pem ubuntu@$MONITOR_IP \
@@ -392,7 +392,7 @@ ssh -p 6677 -i ~/.ssh/lightsail_key.pem ubuntu@<COLLECTOR_IP> \
   "docker ps | grep data-collector"
 
 # 4. 重启采集器
-quants-ctl deploy data-collector \
+quants-infra deploy data-collector \
   --host <COLLECTOR_IP> \
   --exchange gateio
 ```
@@ -404,10 +404,10 @@ quants-ctl deploy data-collector \
 **解决**:
 ```bash
 # 1. 测试告警发送
-quants-ctl monitor test-alert
+quants-infra monitor test-alert
 
 # 2. 检查 Alertmanager 日志
-quants-ctl monitor logs --component alertmanager --lines 50
+quants-infra monitor logs --component alertmanager --lines 50
 
 # 3. 验证 Alertmanager 配置
 ssh -p 6677 -i ~/.ssh/lightsail_key.pem ubuntu@$MONITOR_IP \
@@ -479,14 +479,14 @@ curl -X POST "https://api.telegram.org/bot<YOUR_TOKEN>/sendMessage" \
 
 ```bash
 # 1. 更新到最新版本
-cd infrastructure
+cd quants-infra
 git pull
 
 # 2. 同步配置
 ./scripts/sync_monitoring_configs.sh --copy --force
 
 # 3. 重新部署
-quants-ctl monitor deploy \
+quants-infra monitor deploy \
   --host $MONITOR_IP \
   --grafana-password '<密码>' \
   --telegram-token '<token>' \
@@ -542,25 +542,25 @@ medium_3_0 (80GB SSD) 足够
 
 ```bash
 # 部署
-quants-ctl monitor deploy --host <IP> --grafana-password <PWD>
+quants-infra monitor deploy --host <IP> --grafana-password <PWD>
 
 # SSH 隧道
-quants-ctl monitor tunnel --host <IP>
+quants-infra monitor tunnel --host <IP>
 
 # 添加目标
-quants-ctl monitor add-target --job <NAME> --target <IP:PORT>
+quants-infra monitor add-target --job <NAME> --target <IP:PORT>
 
 # 查看状态
-quants-ctl monitor status
+quants-infra monitor status
 
 # 查看日志
-quants-ctl monitor logs --component <NAME> --lines 100
+quants-infra monitor logs --component <NAME> --lines 100
 
 # 重启组件
-quants-ctl monitor restart --component <NAME>
+quants-infra monitor restart --component <NAME>
 
 # 测试告警
-quants-ctl monitor test-alert
+quants-infra monitor test-alert
 ```
 
 ### B. 配置文件位置

@@ -28,7 +28,7 @@
 
 1. **SecurityManager**: Python API 接口
 2. **Ansible Playbooks**: 自动化配置脚本
-3. **CLI 工具**: `quants-ctl security` 命令
+3. **CLI 工具**: `quants-infra security` 命令
 4. **配置模板**: 预定义的安全规则
 
 ---
@@ -39,7 +39,7 @@
 
 1. **Conda 环境**:
 ```bash
-cd infrastructure
+cd quants-infra
 conda env create -f environment.yml
 conda activate quants-infra
 ```
@@ -63,7 +63,7 @@ chmod 600 ~/.ssh/lightsail_key.pem
 为新创建的实例配置完整的安全设置：
 
 ```bash
-quants-ctl security setup my-instance \
+quants-infra security setup my-instance \
   --profile data-collector \
   --ssh-port 6677 \
   --vpn-network 10.0.0.0/24
@@ -161,7 +161,7 @@ manager.setup_firewall('my_custom')
 
 **语法**:
 ```bash
-quants-ctl security setup <instance_name> [OPTIONS]
+quants-infra security setup <instance_name> [OPTIONS]
 ```
 
 **选项**:
@@ -173,20 +173,20 @@ quants-ctl security setup <instance_name> [OPTIONS]
 **示例**:
 ```bash
 # 为数据采集器配置安全
-quants-ctl security setup collector-01 --profile data-collector
+quants-infra security setup collector-01 --profile data-collector
 
 # 为监控器配置安全（自定义 SSH 端口）
-quants-ctl security setup monitor-01 --profile monitor --ssh-port 2222
+quants-infra security setup monitor-01 --profile monitor --ssh-port 2222
 
 # 使用自定义 SSH 密钥
-quants-ctl security setup bot-01 --profile execution --ssh-key ~/my-key.pem
+quants-infra security setup bot-01 --profile execution --ssh-key ~/my-key.pem
 ```
 
 ### 2. status - 查询安全状态
 
 **语法**:
 ```bash
-quants-ctl security status <instance_name> [OPTIONS]
+quants-infra security status <instance_name> [OPTIONS]
 ```
 
 **选项**:
@@ -195,7 +195,7 @@ quants-ctl security status <instance_name> [OPTIONS]
 
 **示例**:
 ```bash
-quants-ctl security status collector-01
+quants-infra security status collector-01
 ```
 
 **输出示例**:
@@ -224,7 +224,7 @@ fail2ban 状态:
 
 **语法**:
 ```bash
-quants-ctl security verify <instance_name> [OPTIONS]
+quants-infra security verify <instance_name> [OPTIONS]
 ```
 
 **选项**:
@@ -233,7 +233,7 @@ quants-ctl security verify <instance_name> [OPTIONS]
 
 **示例**:
 ```bash
-quants-ctl security verify collector-01
+quants-infra security verify collector-01
 ```
 
 **输出示例**:
@@ -260,21 +260,21 @@ quants-ctl security verify collector-01
 
 **语法**:
 ```bash
-quants-ctl security adjust-vpn <instance_name> [OPTIONS]
+quants-infra security adjust-vpn <instance_name> [OPTIONS]
 ```
 
 **使用场景**: 在部署 WireGuard VPN 后运行，调整防火墙以支持 VPN
 
 **示例**:
 ```bash
-quants-ctl security adjust-vpn collector-01
+quants-infra security adjust-vpn collector-01
 ```
 
 ### 5. adjust-service - 服务防火墙调整
 
 **语法**:
 ```bash
-quants-ctl security adjust-service <instance_name> --type <TYPE> [OPTIONS]
+quants-infra security adjust-service <instance_name> --type <TYPE> [OPTIONS]
 ```
 
 **选项**:
@@ -285,17 +285,17 @@ quants-ctl security adjust-service <instance_name> --type <TYPE> [OPTIONS]
 **示例**:
 ```bash
 # 数据采集器部署后
-quants-ctl security adjust-service collector-01 --type data-collector
+quants-infra security adjust-service collector-01 --type data-collector
 
 # Freqtrade 部署后
-quants-ctl security adjust-service bot-01 --type execution
+quants-infra security adjust-service bot-01 --type execution
 ```
 
 ### 6. test - 测试安全配置
 
 **语法**:
 ```bash
-quants-ctl security test <instance_name> [OPTIONS]
+quants-infra security test <instance_name> [OPTIONS]
 ```
 
 **功能**: 运行自动化测试脚本，验证：
@@ -305,7 +305,7 @@ quants-ctl security test <instance_name> [OPTIONS]
 
 **示例**:
 ```bash
-quants-ctl security test collector-01
+quants-infra security test collector-01
 ```
 
 ---
@@ -316,7 +316,7 @@ quants-ctl security test collector-01
 
 ```bash
 # 1. 创建 Lightsail 实例
-quants-ctl infra create collector-01 \
+quants-infra infra create collector-01 \
   --blueprint ubuntu_22_04 \
   --bundle nano_2_0
 
@@ -324,13 +324,13 @@ quants-ctl infra create collector-01 \
 sleep 120
 
 # 3. 配置安全
-quants-ctl security setup collector-01 --profile data-collector
+quants-infra security setup collector-01 --profile data-collector
 
 # 4. 部署数据采集服务
-quants-ctl deploy --service data-collector --host collector-01
+quants-infra deploy --service data-collector --host collector-01
 
 # 5. 验证安全配置
-quants-ctl security verify collector-01
+quants-infra security verify collector-01
 
 # 6. 测试 SSH 连接
 ssh -i ~/.ssh/lightsail_key.pem ubuntu@<instance_ip> -p 6677
@@ -342,14 +342,14 @@ ssh -i ~/.ssh/lightsail_key.pem ubuntu@<instance_ip> -p 6677
 
 ```bash
 # 1. 运行完整安全配置
-quants-ctl security setup existing-instance --profile default
+quants-infra security setup existing-instance --profile default
 
 # 2. 更新 SSH 连接方式
 # 之前: ssh ubuntu@<ip>
 # 之后: ssh ubuntu@<ip> -p 6677
 
 # 3. 验证配置
-quants-ctl security verify existing-instance
+quants-infra security verify existing-instance
 ```
 
 ### 场景 3: 部署 VPN 网络
@@ -359,13 +359,13 @@ quants-ctl security verify existing-instance
 # ansible-playbook wireguard_server.yml
 
 # 2. 调整防火墙以支持 VPN
-quants-ctl security adjust-vpn vpn-server
+quants-infra security adjust-vpn vpn-server
 
 # 3. 在客户端实例配置 VPN
 # ... 部署 WireGuard 客户端 ...
 
 # 4. 调整客户端防火墙
-quants-ctl security adjust-vpn collector-01
+quants-infra security adjust-vpn collector-01
 ```
 
 ### 场景 4: 安全维护和审计
@@ -374,8 +374,8 @@ quants-ctl security adjust-vpn collector-01
 # 定期检查安全状态
 for instance in collector-01 monitor-01 bot-01; do
   echo "=== $instance ==="
-  quants-ctl security status $instance
-  quants-ctl security verify $instance
+  quants-infra security status $instance
+  quants-infra security verify $instance
 done
 
 # 查看 fail2ban 封禁列表（需要 SSH 到实例）
@@ -424,7 +424,7 @@ sudo iptables -L INPUT -v -n | grep 6677
 **解决方案**:
 ```bash
 # 1. 重新运行 fail2ban 安装
-quants-ctl security setup <instance> --profile default
+quants-infra security setup <instance> --profile default
 
 # 2. 或手动安装
 ssh ubuntu@<ip> -p 6677
@@ -448,7 +448,7 @@ ssh ubuntu@<ip> -p 6677
 sudo iptables -L INPUT -v -n | grep "10.0.0.0/24"
 
 # 3. 重新运行服务防火墙调整
-quants-ctl security adjust-service <instance> --type <type>
+quants-infra security adjust-service <instance> --type <type>
 
 # 4. 检查服务是否监听正确端口
 sudo netstat -tulnp | grep <port>
@@ -456,22 +456,22 @@ sudo netstat -tulnp | grep <port>
 
 ### 问题 4: 安全验证失败
 
-**症状**: `quants-ctl security verify` 显示 FAIL
+**症状**: `quants-infra security verify` 显示 FAIL
 
 **解决方案**:
 ```bash
 # 1. 查看详细验证结果
-quants-ctl security verify <instance> | grep "✗"
+quants-infra security verify <instance> | grep "✗"
 
 # 2. 根据失败项重新配置
 # 如果防火墙失败:
-quants-ctl security setup <instance> --profile <profile>
+quants-infra security setup <instance> --profile <profile>
 
 # 如果 SSH 配置失败:
 # 手动检查 /etc/ssh/sshd_config
 
 # 3. 重新验证
-quants-ctl security verify <instance>
+quants-infra security verify <instance>
 ```
 
 ---
@@ -501,8 +501,8 @@ ssh ubuntu@<ip> -p 6677 "sudo apt update && sudo apt list --upgradable"
 
 1. **运行安全验证**:
 ```bash
-for instance in $(quants-ctl infra list | awk '{print $1}'); do
-  quants-ctl security verify $instance
+for instance in $(quants-infra infra list | awk '{print $1}'); do
+  quants-infra security verify $instance
 done
 ```
 
@@ -512,7 +512,7 @@ done
 git pull origin main
 
 # 重新应用安全规则
-quants-ctl security setup <instance> --profile <profile>
+quants-infra security setup <instance> --profile <profile>
 ```
 
 3. **检查防火墙日志**（如启用了 log_dropped）:
@@ -567,10 +567,10 @@ sudo tail -100 /var/log/fail2ban.log
 3. **恢复**:
 ```bash
 # 重新应用安全配置
-quants-ctl security setup <instance> --profile <profile>
+quants-infra security setup <instance> --profile <profile>
 
 # 验证配置
-quants-ctl security verify <instance>
+quants-infra security verify <instance>
 ```
 
 ---
@@ -589,7 +589,7 @@ resource "aws_lightsail_instance" "collector" {
   bundle_id         = "nano_2_0"
 
   provisioner "local-exec" {
-    command = "quants-ctl security setup ${self.name} --profile data-collector"
+    command = "quants-infra security setup ${self.name} --profile data-collector"
   }
 }
 ```
@@ -602,12 +602,12 @@ resource "aws_lightsail_instance" "collector" {
 # .github/workflows/deploy.yml
 - name: Configure Security
   run: |
-    quants-ctl security setup ${{ env.INSTANCE_NAME }} \
+    quants-infra security setup ${{ env.INSTANCE_NAME }} \
       --profile ${{ env.SECURITY_PROFILE }}
     
 - name: Verify Security
   run: |
-    quants-ctl security verify ${{ env.INSTANCE_NAME }}
+    quants-infra security verify ${{ env.INSTANCE_NAME }}
 ```
 
 ### Python API 使用

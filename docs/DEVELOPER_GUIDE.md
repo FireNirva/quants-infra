@@ -38,7 +38,7 @@ pip install -e .
 pip install pytest pytest-cov black flake8 mypy
 
 # 验证安装
-quants-ctl --version
+quants-infra --version
 pytest --version
 ```
 
@@ -244,7 +244,7 @@ class TestMyServiceDeployer:
 pytest tests/unit/test_my_service_deployer.py -v
 
 # 使用 CLI 测试
-quants-ctl deploy --service my-service --host localhost --dry-run
+quants-infra deploy --service my-service --host localhost --dry-run
 ```
 
 ---

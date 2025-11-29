@@ -51,7 +51,7 @@
 ### 1. 安装依赖
 
 ```bash
-cd infrastructure
+cd quants-infra
 conda env create -f environment.yml
 conda activate quants-infra
 ```
@@ -72,7 +72,7 @@ export AWS_REGION=ap-northeast-1
 
 ```bash
 # 使用 CLI
-quants-ctl infra create \\
+quants-infra infra create \\
   --name test-collector \\
   --bundle small_3_0 \\
   --region ap-northeast-1
@@ -131,10 +131,10 @@ terraform apply
 
 ```bash
 # 基础创建
-quants-ctl infra create --name dev-test-1 --bundle micro_3_0
+quants-infra infra create --name dev-test-1 --bundle micro_3_0
 
 # 完整配置
-quants-ctl infra create \\
+quants-infra infra create \\
   --name prod-collector-1 \\
   --bundle small_3_0 \\
   --blueprint ubuntu_22_04 \\
@@ -150,39 +150,39 @@ quants-ctl infra create \\
 
 ```bash
 # 列出所有实例
-quants-ctl infra list
+quants-infra infra list
 
 # 只显示运行中的实例
-quants-ctl infra list --status running
+quants-infra infra list --status running
 
 # JSON 格式输出
-quants-ctl infra list --output json
+quants-infra infra list --output json
 
 # 查看详细信息
-quants-ctl infra info --name prod-collector-1
+quants-infra infra info --name prod-collector-1
 ```
 
 ### 管理实例生命周期
 
 ```bash
 # 启动实例
-quants-ctl infra manage --name test-1 --action start
+quants-infra infra manage --name test-1 --action start
 
 # 停止实例
-quants-ctl infra manage --name test-1 --action stop
+quants-infra infra manage --name test-1 --action stop
 
 # 重启实例
-quants-ctl infra manage --name test-1 --action reboot
+quants-infra infra manage --name test-1 --action reboot
 ```
 
 ### 销毁实例
 
 ```bash
 # 交互式确认
-quants-ctl infra destroy --name test-1
+quants-infra infra destroy --name test-1
 
 # 强制删除
-quants-ctl infra destroy --name test-1 --force
+quants-infra infra destroy --name test-1 --force
 ```
 
 ---
@@ -260,7 +260,7 @@ manager.open_instance_ports('instance-name', ports)
 
 ```bash
 # CLI 创建时分配
-quants-ctl infra create --name prod-monitor --static-ip
+quants-infra infra create --name prod-monitor --static-ip
 
 # Terraform 配置
 module "monitor" {
@@ -274,7 +274,7 @@ module "monitor" {
 
 ```bash
 # 使用 Ansible playbook
-quants-ctl deploy --service wireguard --host all
+quants-infra deploy --service wireguard --host all
 
 # 手动配置
 # 1. 安装 WireGuard
@@ -308,7 +308,7 @@ quants-ctl deploy --service wireguard --host all
 
 2. **按需停止非生产实例**
    ```bash
-   quants-ctl infra manage --name dev-test --action stop
+   quants-infra infra manage --name dev-test --action stop
    ```
 
 3. **共享监控实例**
@@ -395,13 +395,13 @@ apt-get update && apt-get upgrade
 
 1. **检查实例状态**
    ```bash
-   quants-ctl infra info --name instance-name
+   quants-infra infra info --name instance-name
    ```
 
 2. **检查防火墙规则**
    ```bash
    # 确认 SSH 端口开放
-   quants-ctl infra info --name instance-name | grep firewall
+   quants-infra infra info --name instance-name | grep firewall
    ```
 
 3. **检查 SSH 密钥**
@@ -423,7 +423,7 @@ apt-get update && apt-get upgrade
 
 3. **查看详细日志**
    ```bash
-   quants-ctl deploy --service service-name --host host-name -vvv
+   quants-infra deploy --service service-name --host host-name -vvv
    ```
 
 ### 实例性能问题
