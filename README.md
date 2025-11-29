@@ -12,6 +12,7 @@
 - 📍 **静态 IP 支持** - IP 地址永久不变，停止/启动后保持不变 ⭐
 - 🛡️ **企业级安全** - Whitelist防火墙 + SSH加固 (端口6677) + fail2ban防护
 - 📦 **多服务部署** - Freqtrade交易机器人、数据采集、监控系统
+- 💾 **Data Lake** - Rsync同步 + Checkpoint续传 + 自动清理 ⭐ NEW
 - 🔧 **基础设施即代码** - Terraform + Ansible 自动化
 - 🎯 **统一CLI** - 简单易用的命令行工具 (`quants-infra`)
 - 📊 **完整监控** - Prometheus + Grafana + Alertmanager
@@ -21,28 +22,40 @@
 ## ⚡ 5分钟快速开始
 
 ```bash
-# 1. 创建环境
+# 1. 克隆项目
+git clone https://github.com/FireNirva/quants-infra.git
+cd quants-infra
+
+# 2. 创建并激活环境
 conda env create -f environment.yml
 conda activate quants-infra
+
+# 3. 安装项目
 pip install -e .
 
-# 2. 验证安装
+# 4. 验证安装
 quants-infra --version
+quants-infra --help
 
-# 3. 配置AWS凭证
+# 5. 配置AWS凭证（如需使用云服务）
 aws configure
 
-# 4. 创建Lightsail实例（带静态IP）⭐
+# 6. 创建Lightsail实例（带静态IP）⭐
 quants-infra infra create \
   --name my-bot-01 \
   --bundle nano_3_0 \
   --region ap-northeast-1 \
   --use-static-ip  # IP地址永久不变！
 
-# 5. 应用安全配置
+# 7. 应用安全配置
 quants-infra security setup \
   --instance-ip <YOUR_IP> \
   --profile execution
+
+# 8. 或使用 Data Lake 同步数据 ⭐ NEW
+cp config/data_lake.example.yml config/data_lake.yml
+# 编辑配置文件，设置远程主机信息
+quants-infra data-lake sync cex_ticks
 ```
 
 详细说明: [QUICK_START.md](QUICK_START.md)
@@ -151,6 +164,64 @@ quants-infra data-collector update \
   --exchange gateio
 ```
 
+### Data Lake 数据同步 ⭐ NEW
+
+```bash
+# 验证配置文件
+quants-infra data-lake validate --config config/data_lake.yml
+
+# 测试到远程主机的连接
+quants-infra data-lake test-connection cex_ticks
+
+# 同步单个 profile 的数据
+quants-infra data-lake sync cex_ticks
+
+# 同步所有启用的 profiles
+quants-infra data-lake sync --all
+
+# Dry-run 模式（仅显示将要执行的操作）
+quants-infra data-lake sync cex_ticks --dry-run
+
+# 查看数据统计
+quants-infra data-lake stats cex_ticks
+
+# 查看所有 profiles 的统计（表格格式）
+quants-infra data-lake stats --all
+
+# 输出 JSON 格式
+quants-infra data-lake stats cex_ticks --format json
+
+# 手动清理旧数据
+quants-infra data-lake cleanup cex_ticks --dry-run
+quants-infra data-lake cleanup cex_ticks
+
+# 清理所有 profiles
+quants-infra data-lake cleanup --all
+```
+
+**使用场景：**
+```bash
+# 完整工作流示例
+# 1. 创建配置
+cp config/data_lake.example.yml config/data_lake.yml
+vim config/data_lake.yml  # 设置远程主机信息
+
+# 2. 验证配置
+quants-infra data-lake validate
+
+# 3. 测试连接
+quants-infra data-lake test-connection cex_ticks
+
+# 4. 首次同步
+quants-infra data-lake sync cex_ticks
+
+# 5. 查看结果
+quants-infra data-lake stats cex_ticks
+
+# 6. 设置 cron 定时同步
+echo "0 * * * * cd /path/to/quants-infra && quants-infra data-lake sync --all" | crontab -
+```
+
 ## 🏗️ 项目结构
 
 ```
@@ -158,11 +229,22 @@ quants-infra/
 ├── README.md                 # 📖 主文档
 ├── QUICK_START.md           # ⚡ 快速开始
 ├── CHANGELOG.md             # 📝 变更日志
+├── LICENSE                  # 📄 MIT 许可证
 │
 ├── core/                    # 核心抽象层
+│   ├── data_lake/           # 🆕 Data Lake 数据同步
+│   │   ├── manager.py       # 数据湖管理器
+│   │   ├── syncer.py        # Rsync 同步器
+│   │   ├── checkpoint.py    # Checkpoint 管理
+│   │   ├── cleaner.py       # 保留期清理
+│   │   └── stats.py         # 统计收集
+│   ├── schemas/             # 🆕 配置验证
+│   │   ├── data_lake_schema.py
+│   │   ├── config_schemas.py
+│   │   └── environment_schema.py
 │   ├── security_manager.py  # 安全配置管理 ⭐
 │   ├── ansible_manager.py   # Ansible 自动化
-│   └── ...
+│   └── deployment_orchestrator.py  # 🆕 部署编排
 │
 ├── providers/               # 云服务商适配器
 │   └── aws/
@@ -176,7 +258,11 @@ quants-infra/
 ├── cli/                     # 命令行工具
 │   ├── main.py              # CLI 入口
 │   └── commands/
+│       ├── data_lake.py     # 🆕 Data Lake 命令
+│       ├── data_collector.py
+│       ├── freqtrade.py     # 🆕 Freqtrade 命令
 │       ├── infra.py         # 基础设施命令
+│       ├── monitor.py
 │       └── security.py      # 安全命令 ⭐
 │
 ├── ansible/                 # Ansible Playbooks & 模板
@@ -188,10 +274,19 @@ quants-infra/
 │   ├── modules/lightsail/
 │   └── environments/
 │
-├── docs/                    # 📚 完整文档 (6个核心文档)
+├── config/                  # 配置文件
+│   ├── data_lake.example.yml  # 🆕 Data Lake 配置示例
+│   ├── examples/            # 🆕 更多配置示例
+│   ├── monitoring/          # 🆕 监控配置模板
+│   └── security/            # 安全规则配置
+│
+├── docs/                    # 📚 完整文档 (10+ 核心文档)
 │   ├── USER_GUIDE.md
 │   ├── DEVELOPER_GUIDE.md
 │   ├── SECURITY_GUIDE.md
+│   ├── DATA_LAKE_MVP.md     # 🆕 Data Lake 实现文档
+│   ├── DATA_LAKE_USER_GUIDE.md  # 🆕 Data Lake 用户指南
+│   ├── TAILSCALE_INTEGRATION_PLAN.md  # 🆕 Tailscale 集成
 │   └── archived/            # 历史文档归档
 │
 ├── scripts/                 # 🔧 实用脚本 (10个)
@@ -201,8 +296,16 @@ quants-infra/
 │
 ├── tests/                   # 🧪 测试套件
 │   ├── unit/                # 单元测试
+│   │   ├── test_data_lake.py         # 🆕 Data Lake 单元测试
+│   │   └── test_config*.py           # 🆕 配置验证测试
 │   ├── integration/         # 集成测试
+│   │   └── test_data_lake_e2e.py     # 🆕 Data Lake 集成测试
+│   ├── acceptance/          # 🆕 验收测试
 │   └── e2e/                 # E2E 测试 ⭐
+│       ├── test_data_lake.py         # 🆕 Data Lake 本地测试
+│       ├── test_data_lake_real.py    # 🆕 Data Lake 真实 E2E
+│       ├── scripts/run_data_lake.sh  # 🆕 Data Lake 测试脚本
+│       └── README_DATA_LAKE_E2E.md   # 🆕 Data Lake E2E 文档
 │
 └── config/                  # 配置文件
     └── security/            # 安全规则配置 ⭐
