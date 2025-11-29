@@ -500,8 +500,8 @@ class TestDataLakeRealE2E:
         if app_log_result['success']:
             print(f"完整应用日志:\n{app_log_result['stdout']}")
         
-        # 检查环境变量和配置
-        print("\n检查环境变量和配置...")
+        # 检查环境变量和配置，验证配置文件
+        print("\n检查环境变量、配置和验证配置文件...")
         env_check_cmd = """
         echo '=== Environment Variables ===' && \
         sudo cat /etc/systemd/system/quants-lab-gateio-collector.service | grep -E 'Environment=' && \
@@ -509,16 +509,21 @@ class TestDataLakeRealE2E:
         echo '=== Config File ===' && \
         cat /opt/quants-lab/config/orderbook_tick_gateio.yml && \
         echo '' && \
-        echo '=== Python Process Environment ===' && \
-        sudo cat /proc/$(pgrep -f 'cli.py run-tasks')/environ | tr '\\0' '\\n' | grep -E 'MONGO|PATH|PYTHON' | head -10
+        echo '=== Validate Config (should show no errors) ===' && \
+        cd /opt/quants-lab && \
+        /opt/miniconda3/bin/conda run --no-capture-output -n quants-lab python cli.py validate-config config/orderbook_tick_gateio.yml 2>&1 && \
+        echo '' && \
+        echo '=== List Tasks ===' && \
+        /opt/miniconda3/bin/conda run --no-capture-output -n quants-lab python cli.py list-tasks --config config/orderbook_tick_gateio.yml 2>&1
         """
         env_result = run_ssh_command(
             collector_ip,
             env_check_cmd,
-            test_config['ssh_key_path']
+            test_config['ssh_key_path'],
+            timeout=30
         )
         if env_result['success']:
-            print(f"环境信息:\n{env_result['stdout']}")
+            print(f"环境和配置信息:\n{env_result['stdout']}")
         
         print_step(3, 3, f"等待收集数据 ({test_config['collect_duration_seconds']} 秒)")
         print("📝 注意：现在使用 run-tasks 命令，会实际运行数据采集任务")
@@ -619,6 +624,27 @@ class TestDataLakeRealE2E:
             status_cmd = "systemctl status quants-lab-gateio-collector --no-pager"
             status_result = run_ssh_command(collector_ip, status_cmd, test_config['ssh_key_path'])
             print(f"服务状态:\n{status_result['stdout']}")
+            
+            # 尝试手动触发任务看是否有错误
+            print("\n⚠️  尝试手动触发任务以诊断问题...")
+            trigger_cmd = """
+            cd /opt/quants-lab && \
+            timeout 60 /opt/miniconda3/bin/conda run --no-capture-output -n quants-lab \
+                python cli.py trigger-task orderbook_tick_gateio \
+                --config config/orderbook_tick_gateio.yml \
+                --timeout 50 2>&1 || echo "Trigger failed or timed out"
+            """
+            trigger_result = run_ssh_command(collector_ip, trigger_cmd, test_config['ssh_key_path'], timeout=70)
+            if trigger_result['success']:
+                print(f"手动触发结果:\n{trigger_result['stdout']}")
+                # 再次检查是否有文件生成
+                files_result = run_ssh_command(
+                    collector_ip,
+                    f"find {test_config['collector_data_root']} -type f 2>/dev/null | head -5",
+                    test_config['ssh_key_path']
+                )
+                if files_result['success'] and files_result['stdout'].strip():
+                    print(f"手动触发后发现文件:\n{files_result['stdout']}")
             
             pytest.fail("Data Collector 没有收集到数据文件")
         
