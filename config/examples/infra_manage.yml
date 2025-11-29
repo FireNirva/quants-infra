@@ -1,0 +1,31 @@
+# Infrastructure Instance Management Configuration
+# 实例管理配置（启动/停止/重启）
+
+name: prod-server-1
+action: restart  # Options: start, stop, reboot
+region: us-east-1
+
+# Optional: Force operation (for stop)
+force: false
+
+# Optional: AWS profile
+# profile: my-aws-profile
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Restart instance:
+#   quants-infra infra manage --config infra_manage.yml
+#
+# Override action:
+#   quants-infra infra manage --config infra_manage.yml --action stop
+#
+# Force stop:
+#   quants-infra infra manage --config infra_manage.yml --action stop --force
+#
+# With environment variables:
+#   name: ${INSTANCE_NAME}
+#   action: ${ACTION:restart}
+#   region: ${AWS_REGION:us-east-1}
+

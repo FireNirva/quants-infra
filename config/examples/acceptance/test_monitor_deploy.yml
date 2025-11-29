@@ -1,0 +1,19 @@
+# Test configuration for monitor deployment
+# Used in acceptance tests for config-based CLI testing
+
+host: ${MONITOR_HOST}
+grafana_password: ${GRAFANA_PASSWORD:test_password123}
+
+# Alert configuration (optional for testing)
+telegram_token: ${TELEGRAM_TOKEN:}
+telegram_chat_id: ${TELEGRAM_CHAT_ID:}
+email: ${ALERT_EMAIL:}
+
+# SSH configuration
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 22
+ssh_user: ubuntu
+
+# Skip security for testing
+skip_security: true
+

@@ -1,0 +1,43 @@
+# Infrastructure Instance Creation with Environment Variables
+# Demonstrates how to use environment variables in configuration
+
+# Environment variables with defaults
+name: ${INSTANCE_NAME:prod-server-default}
+region: ${AWS_REGION:us-east-1}
+
+# Standard configuration
+blueprint: ubuntu_22_04
+bundle: ${INSTANCE_BUNDLE:medium_2_0}
+
+# Optional configurations with env vars
+availability_zone: ${AWS_AZ:us-east-1a}
+key_pair: ${SSH_KEY_NAME:default-key}
+static_ip: true
+
+# Tags can also use env vars
+tags:
+  environment: ${ENVIRONMENT:production}
+  team: ${TEAM:infrastructure}
+  project: quants-trading
+  owner: ${OWNER:devops-team}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Example 1: Use all defaults
+#   quants-infra infra create --config infra_create_with_env_vars.yml
+#   Result: Instance named 'prod-server-default' in 'us-east-1'
+#
+# Example 2: Override with environment variables
+#   export INSTANCE_NAME=staging-server
+#   export AWS_REGION=ap-southeast-1
+#   export ENVIRONMENT=staging
+#   quants-infra infra create --config infra_create_with_env_vars.yml
+#   Result: Instance named 'staging-server' in 'ap-southeast-1'
+#
+# Example 3: Mix env vars and CLI override
+#   export INSTANCE_NAME=test-server
+#   quants-infra infra create --config infra_create_with_env_vars.yml --bundle small_3_0
+#   Result: Instance named 'test-server' with 'small_3_0' bundle
+

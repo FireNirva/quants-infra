@@ -1,0 +1,47 @@
+# Data Collector Management Configuration  
+# 数据采集器管理配置 (start/stop/restart/status/logs)
+
+# Target server
+host: 54.XXX.XXX.XXX
+vpn_ip: 10.0.0.2
+
+# Exchange
+exchange: gateio  # Options: gateio, mexc
+
+# Metrics (for status command)
+metrics_port: 8000
+
+# SSH configuration
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 22
+ssh_user: ubuntu
+
+# Logs configuration (optional)
+lines: 100  # Number of log lines to display
+follow: false  # Set to true for continuous log output
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Start:
+#   quants-infra data-collector start --config data_collector_manage.yml
+#
+# Stop:
+#   quants-infra data-collector stop --config data_collector_manage.yml
+#
+# Restart:
+#   quants-infra data-collector restart --config data_collector_manage.yml
+#
+# Status:
+#   quants-infra data-collector status --config data_collector_manage.yml
+#
+# Logs:
+#   quants-infra data-collector logs --config data_collector_manage.yml
+#   quants-infra data-collector logs --config data_collector_manage.yml --follow
+#
+# Environment variables:
+#   host: ${DATA_COLLECTOR_HOST}
+#   vpn_ip: ${DATA_COLLECTOR_VPN_IP}
+#   exchange: ${EXCHANGE:gateio}
+

@@ -1,0 +1,75 @@
+# Infrastructure Instance Creation Configuration
+# This file can be used with: quants-infra infra create --config infra_create.yml
+
+# Basic instance configuration
+name: prod-server-1
+blueprint: ubuntu_22_04
+bundle: medium_2_0
+region: us-east-1
+
+# Optional: Availability zone (defaults to region+'a')
+availability_zone: us-east-1a
+
+# Optional: SSH key pair
+key_pair: my-lightsail-key
+
+# Optional: Create and attach static IP
+static_ip: true
+
+# Optional: AWS profile (uses default if not specified)
+# profile: my-aws-profile
+
+# Optional: Tags for resource management
+tags:
+  environment: production
+  team: infrastructure
+  project: quants-trading
+  managed_by: quants-infra
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Environment Variable Support
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# You can use environment variables in your config:
+#
+# Example 1: Variable without default
+#   region: ${AWS_REGION}
+#
+# Example 2: Variable with default value
+#   name: ${INSTANCE_NAME:default-instance}
+#   region: ${AWS_REGION:us-east-1}
+#
+# Usage:
+#   export AWS_REGION=ap-northeast-1
+#   export INSTANCE_NAME=my-custom-instance
+#   quants-infra infra create --config infra_create.yml
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CLI Override
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CLI parameters take precedence over config file values:
+#
+# quants-infra infra create --config infra_create.yml --name override-name
+#
+# In this example:
+#   - name will be 'override-name' (from CLI)
+#   - other values come from config file
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Available Blueprints
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# - ubuntu_22_04      (Ubuntu 22.04 LTS)
+# - ubuntu_20_04      (Ubuntu 20.04 LTS)
+# - amazon_linux_2023 (Amazon Linux 2023)
+# - debian_12         (Debian 12)
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Available Bundles (Instance Sizes)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# - nano_3_0    (512 MB RAM,  1 vCPU)
+# - micro_3_0   (1 GB RAM,    1 vCPU)
+# - small_3_0   (2 GB RAM,    1 vCPU)
+# - medium_3_0  (4 GB RAM,    2 vCPUs)
+# - large_3_0   (8 GB RAM,    2 vCPUs)
+# - xlarge_3_0  (16 GB RAM,   4 vCPUs)
+# - 2xlarge_3_0 (32 GB RAM,   8 vCPUs)
+

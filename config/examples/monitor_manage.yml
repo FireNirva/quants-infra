@@ -1,0 +1,47 @@
+# Monitor Management Configuration
+# 监控系统管理配置 (status/logs/restart/test_alert)
+
+# Target server
+host: 54.XXX.XXX.XXX
+
+# SSH configuration
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 6677
+ssh_user: ubuntu
+
+# Tunnel configuration (optional)
+local_port: 3000  # Local port for Grafana tunnel
+
+# Logs configuration (optional)
+service: prometheus  # Options: prometheus, grafana, alertmanager, node_exporter
+lines: 100  # Number of log lines
+follow: false
+
+# Test alert configuration (optional)
+severity: warning  # Options: info, warning, critical
+message: "Test alert from quants-infra"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Check status:
+#   quants-infra monitor status --config monitor_manage.yml
+#
+# View logs:
+#   quants-infra monitor logs --config monitor_manage.yml
+#   quants-infra monitor logs --config monitor_manage.yml --service grafana
+#
+# Restart service:
+#   quants-infra monitor restart --config monitor_manage.yml
+#
+# Create SSH tunnel:
+#   quants-infra monitor tunnel --config monitor_manage.yml
+#
+# Test alert:
+#   quants-infra monitor test_alert --config monitor_manage.yml
+#
+# Environment variables:
+#   host: ${MONITOR_HOST}
+#   ssh_key: ${SSH_KEY_PATH:~/.ssh/lightsail_key.pem}
+

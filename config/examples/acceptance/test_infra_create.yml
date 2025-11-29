@@ -1,0 +1,15 @@
+# Test configuration for infrastructure creation
+# Used in acceptance tests for config-based CLI testing
+
+name: acceptance-test-infra
+blueprint: ubuntu_22_04
+bundle: nano_3_0
+region: us-east-1
+availability_zone: us-east-1a
+static_ip: false
+
+tags:
+  environment: test
+  purpose: acceptance-testing
+  test_type: infra
+

@@ -1,0 +1,44 @@
+# Development Environment Configuration
+# Minimal setup for development and testing
+
+name: development
+description: Lightweight development environment
+
+region: us-east-1
+tags:
+  environment: development
+  managed_by: quants-infra
+
+# Infrastructure
+infrastructure:
+  instances:
+    # Single instance for dev
+    - name: dev-server-1
+      blueprint: ubuntu_22_04
+      bundle: nano_3_0  # Smallest bundle
+      static_ip: false
+      tags:
+        role: dev-server
+
+# Security (optional for dev)
+security:
+  instances:
+    - dev-server-1
+  ssh:
+    port: 22  # Standard SSH port for dev
+    key_path: ~/.ssh/lightsail_key.pem
+    user: ubuntu
+
+# Services (minimal setup)
+services:
+  - type: data-collector
+    target: dev-server-1
+    config:
+      exchange: gateio
+      pairs:
+        - BTC-USDT
+      vpn_ip: 10.0.0.2
+      metrics_port: 8000
+      skip_monitoring: true
+      skip_security: false
+

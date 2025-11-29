@@ -1,0 +1,32 @@
+# Infrastructure Instance List Configuration
+# 实例列表查询配置
+
+region: us-east-1
+
+# Optional: Output format
+output: table  # Options: table, json
+
+# Optional: Filter by status
+# status: running  # Options: running, stopped, pending
+
+# Optional: AWS profile
+# profile: my-aws-profile
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# List all instances:
+#   quants-infra infra list --config infra_list.yml
+#
+# List only running instances:
+#   quants-infra infra list --config infra_list.yml --status running
+#
+# Get JSON output:
+#   quants-infra infra list --config infra_list.yml --output json
+#
+# With environment variables:
+#   region: ${AWS_REGION:us-east-1}
+#   output: ${OUTPUT_FORMAT:table}
+#   status: ${FILTER_STATUS}
+

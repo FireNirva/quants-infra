@@ -1,0 +1,47 @@
+# Minimal test environment configuration
+# Used in comprehensive acceptance tests
+
+name: acceptance-test-env
+description: Minimal test environment for acceptance testing
+
+# Global settings
+region: us-east-1
+tags:
+  environment: test
+  purpose: acceptance-testing
+  managed_by: quants-infra
+
+# Infrastructure - Single instance
+infrastructure:
+  instances:
+    - name: acceptance-test-collector
+      blueprint: ubuntu_22_04
+      bundle: nano_3_0
+      static_ip: false
+      tags:
+        role: data-collector
+        test_type: acceptance
+
+# Security configuration (minimal)
+security:
+  instances:
+    - acceptance-test-collector
+  ssh:
+    port: 22
+    key_path: ~/.ssh/lightsail_key.pem
+    user: ubuntu
+  vpn_network: 10.0.0.0/24
+
+# Services
+services:
+  - type: data-collector
+    target: acceptance-test-collector
+    config:
+      exchange: gateio
+      pairs:
+        - BTC-USDT
+      vpn_ip: 10.0.0.2
+      metrics_port: 8000
+      skip_monitoring: true
+      skip_security: true
+

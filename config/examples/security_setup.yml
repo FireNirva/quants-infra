@@ -1,0 +1,25 @@
+# Security Setup Configuration
+# 安全设置配置
+
+instance_name: prod-server-1
+profile: data-collector  # Options: default, data-collector, monitor, execution
+ssh_port: 6677
+ssh_key: ~/.ssh/lightsail_key.pem
+vpn_network: 10.0.0.0/24
+region: us-east-1
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Setup complete security:
+#   quants-infra security setup --config security_setup.yml
+#
+# Override SSH port:
+#   quants-infra security setup --config security_setup.yml --ssh-port 22
+#
+# With environment variables:
+#   instance_name: ${INSTANCE_NAME}
+#   ssh_key: ${SSH_KEY_PATH:~/.ssh/lightsail_key.pem}
+#   region: ${AWS_REGION:us-east-1}
+

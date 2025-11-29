@@ -1,0 +1,36 @@
+# Monitor Add Target Configuration
+# 监控目标添加配置
+
+# Monitor server
+host: 54.XXX.XXX.XXX
+
+# Target to monitor
+job: data-collector  # Job name in Prometheus
+target: 10.0.0.2:8000  # Target endpoint (VPN IP:port)
+
+# Optional labels
+labels:
+  environment: production
+  instance: collector-1
+  region: us-east-1
+
+# SSH configuration
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 6677
+ssh_user: ubuntu
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Add monitoring target:
+#   quants-infra monitor add-target --config monitor_add_target.yml
+#
+# Override target:
+#   quants-infra monitor add-target --config monitor_add_target.yml --target 10.0.0.3:8000
+#
+# Environment variables:
+#   host: ${MONITOR_HOST}
+#   target: ${DATA_COLLECTOR_VPN_IP}:${METRICS_PORT}
+#   job: ${JOB_NAME:data-collector}
+

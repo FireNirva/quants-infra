@@ -1,0 +1,10 @@
+# Test configuration for security setup
+# Used in acceptance tests for config-based CLI testing
+
+instance_name: acceptance-test-security
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 22  # Using standard port for testing
+profile: default
+vpn_network: 10.0.0.0/24
+region: us-east-1
+

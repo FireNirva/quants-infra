@@ -1,0 +1,55 @@
+# Data Collector Deployment Configuration
+# 数据采集器部署配置
+
+# Target server
+host: 54.XXX.XXX.XXX
+vpn_ip: 10.0.0.2
+
+# Monitor connection (optional)
+monitor_vpn_ip: 10.0.0.1
+
+# Exchange configuration
+exchange: gateio  # Options: gateio, mexc
+pairs:
+  - BTC-USDT
+  - ETH-USDT
+  - SOL-USDT
+
+# Metrics
+metrics_port: 8000
+
+# SSH configuration
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 22
+ssh_user: ubuntu
+
+# Repository (optional)
+github_repo: https://github.com/hummingbot/quants-lab.git
+github_branch: main
+
+# Skip options
+skip_monitoring: false
+skip_security: false
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Environment Variables Support
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# host: ${DATA_COLLECTOR_HOST}
+# vpn_ip: ${DATA_COLLECTOR_VPN_IP:10.0.0.2}
+# pairs:
+#   - ${TRADING_PAIR_1:BTC-USDT}
+#   - ${TRADING_PAIR_2:ETH-USDT}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Deploy with config file:
+#   quants-infra data-collector deploy --config data_collector_deploy.yml
+#
+# Override exchange:
+#   quants-infra data-collector deploy --config data_collector_deploy.yml --exchange mexc
+#
+# Skip monitoring:
+#   quants-infra data-collector deploy --config data_collector_deploy.yml --skip-monitoring
+

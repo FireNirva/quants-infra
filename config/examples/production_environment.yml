@@ -1,0 +1,112 @@
+# Complete Production Environment Configuration
+# Deploy entire stack with: quants-infra deploy-environment --config production_environment.yml
+
+name: production
+description: Complete quantitative trading production environment
+
+# Global configuration
+region: us-east-1
+tags:
+  environment: production
+  managed_by: quants-infra
+  project: quants-trading
+
+# Infrastructure
+infrastructure:
+  instances:
+    # Data collector instance
+    - name: prod-data-collector-1
+      blueprint: ubuntu_22_04
+      bundle: medium_2_0
+      availability_zone: us-east-1a
+      static_ip: true
+      tags:
+        role: data-collector
+        tier: core
+    
+    # Monitor instance
+    - name: prod-monitor-1
+      blueprint: ubuntu_22_04
+      bundle: small_2_0
+      availability_zone: us-east-1b
+      static_ip: true
+      tags:
+        role: monitor
+        tier: management
+
+# Security configuration
+security:
+  instances:
+    - prod-data-collector-1
+    - prod-monitor-1
+  
+  ssh:
+    port: 6677
+    key_path: ~/.ssh/prod-key.pem
+    user: ubuntu
+  
+  vpn_network: 10.0.0.0/24
+  
+  firewall:
+    default_policy: drop
+    rules:
+      # SSH access (restrict to your IP)
+      - port: 6677
+        protocol: tcp
+        source: ${YOUR_IP:1.2.3.4/32}
+        comment: SSH access from office
+      
+      # WireGuard VPN
+      - port: 51820
+        protocol: udp
+        source: 0.0.0.0/0
+        comment: WireGuard VPN
+      
+      # Metrics (VPN only)
+      - port: 8000
+        protocol: tcp
+        source: 10.0.0.0/24
+        comment: Prometheus metrics
+
+# Services
+services:
+  # Data Collector Service
+  - type: data-collector
+    target: prod-data-collector-1
+    config:
+      exchange: gateio
+      pairs:
+        - BTC-USDT
+        - ETH-USDT
+        - SOL-USDT
+        - BNB-USDT
+      vpn_ip: 10.0.0.2
+      monitor_vpn_ip: 10.0.0.1
+      metrics_port: 8000
+      ssh_key: ~/.ssh/prod-key.pem
+      ssh_port: 22
+      skip_monitoring: false
+      skip_security: true  # Already configured above
+  
+  # Monitor Service
+  - type: monitor
+    target: prod-monitor-1
+    config:
+      grafana_password: ${GRAFANA_PASSWORD:changeme}
+      telegram_token: ${TELEGRAM_BOT_TOKEN}
+      telegram_chat_id: ${TELEGRAM_CHAT_ID}
+      email: ${ALERT_EMAIL:admin@example.com}
+      ssh_key: ~/.ssh/prod-key.pem
+      ssh_port: 6677
+      skip_security: true  # Already configured above
+
+# Usage:
+# 1. Preview deployment: quants-infra deploy-environment --config production_environment.yml --dry-run
+# 2. Deploy: quants-infra deploy-environment --config production_environment.yml
+# 3. Set environment variables:
+#    export YOUR_IP=1.2.3.4
+#    export GRAFANA_PASSWORD=secure_password
+#    export TELEGRAM_BOT_TOKEN=your_token
+#    export TELEGRAM_CHAT_ID=your_chat_id
+#    export ALERT_EMAIL=admin@example.com
+

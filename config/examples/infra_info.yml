@@ -1,0 +1,27 @@
+# Infrastructure Instance Info Configuration
+# 实例信息查询配置
+
+name: prod-server-1
+region: us-east-1
+
+# Optional: Output format
+output: table  # Options: table, json
+
+# Optional: AWS profile
+# profile: my-aws-profile
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Get instance info:
+#   quants-infra infra info --config infra_info.yml
+#
+# Override output format:
+#   quants-infra infra info --config infra_info.yml --output json
+#
+# With environment variables:
+#   name: ${INSTANCE_NAME}
+#   region: ${AWS_REGION:us-east-1}
+#   output: ${OUTPUT_FORMAT:table}
+

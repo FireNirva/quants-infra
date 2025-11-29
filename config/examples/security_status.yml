@@ -1,0 +1,19 @@
+# Security Status Configuration
+# 安全状态查询配置
+
+instance_name: prod-server-1
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 6677
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Check security status:
+#   quants-infra security status --config security_status.yml
+#
+# With environment variables:
+#   instance_name: ${INSTANCE_NAME}
+#   ssh_key: ${SSH_KEY_PATH}
+#   ssh_port: ${SSH_PORT:6677}
+

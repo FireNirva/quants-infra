@@ -1,0 +1,26 @@
+# Test configuration for data collector deployment
+# Used in acceptance tests for config-based CLI testing
+
+host: ${DATA_COLLECTOR_HOST}
+vpn_ip: 10.0.0.2
+exchange: gateio
+pairs:
+  - BTC-USDT
+
+# Monitor configuration
+monitor_vpn_ip: 10.0.0.1
+metrics_port: 8000
+
+# SSH configuration
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 22
+ssh_user: ubuntu
+
+# Skip options for testing
+skip_monitoring: true
+skip_security: true
+
+# Repository (use defaults)
+github_repo: https://github.com/hummingbot/quants-lab.git
+github_branch: main
+

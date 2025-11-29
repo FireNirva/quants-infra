@@ -1,0 +1,37 @@
+# Monitor Deployment Configuration
+# 监控系统部署配置
+
+# Target server
+host: 54.XXX.XXX.XXX
+
+# Grafana configuration
+grafana_password: ${GRAFANA_PASSWORD:changeme}
+
+# Alert channels (optional)
+telegram_token: ${TELEGRAM_BOT_TOKEN}
+telegram_chat_id: ${TELEGRAM_CHAT_ID}
+email: alerts@example.com
+
+# SSH configuration
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 6677
+ssh_user: ubuntu
+
+# Skip options
+skip_security: false
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Deploy monitoring stack:
+#   quants-infra monitor deploy --config monitor_deploy.yml
+#
+# Deploy without security setup:
+#   quants-infra monitor deploy --config monitor_deploy.yml --skip-security
+#
+# Environment variables:
+#   host: ${MONITOR_HOST}
+#   grafana_password: ${GRAFANA_PASSWORD}
+#   telegram_token: ${TELEGRAM_BOT_TOKEN}
+

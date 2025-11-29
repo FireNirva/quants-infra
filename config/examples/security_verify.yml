@@ -1,0 +1,18 @@
+# Security Verification Configuration
+# 安全验证配置
+
+instance_name: prod-server-1
+ssh_key: ~/.ssh/lightsail_key.pem
+ssh_port: 6677
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Verify security configuration:
+#   quants-infra security verify --config security_verify.yml
+#
+# With environment variables:
+#   instance_name: ${INSTANCE_NAME}
+#   ssh_key: ${SSH_KEY_PATH:~/.ssh/lightsail_key.pem}
+

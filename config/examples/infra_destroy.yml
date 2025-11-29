@@ -1,0 +1,26 @@
+# Infrastructure Instance Destruction Configuration
+# 实例销毁配置
+
+name: prod-server-1
+region: us-east-1
+
+# Optional: Force deletion without confirmation
+force: false
+
+# Optional: AWS profile
+# profile: my-aws-profile
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Basic usage:
+#   quants-infra infra destroy --config infra_destroy.yml
+#
+# Override force flag:
+#   quants-infra infra destroy --config infra_destroy.yml --force
+#
+# With environment variables:
+#   name: ${INSTANCE_NAME:prod-server-1}
+#   region: ${AWS_REGION:us-east-1}
+
