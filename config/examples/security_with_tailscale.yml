@@ -1,0 +1,59 @@
+# Security Setup Configuration with Tailscale VPN
+# 安全设置配置（带 Tailscale VPN）
+
+instance_name: data-collector-01
+profile: data-collector  # Options: default, data-collector, monitor, execution
+ssh_port: 6677
+ssh_key: ~/.ssh/lightsail_key.pem
+region: ap-northeast-1
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# VPN Configuration (Tailscale)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+vpn: tailscale
+
+# Tailscale Auth Key
+# 强烈建议使用环境变量 TAILSCALE_AUTH_KEY 而不是硬编码在配置文件中
+# Get your auth key from: https://login.tailscale.com/admin/settings/keys
+# tailscale_key: tskey-auth-xxxxx-yyyyyyyyyyy
+
+# Optional: Advertise subnet routes (if this node should act as a subnet router)
+# tailscale_routes: 10.0.0.0/24
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# WireGuard Configuration (alternative VPN option)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# If you prefer WireGuard instead of Tailscale, use:
+# vpn: wireguard
+# vpn_network: 10.0.0.0/24
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Usage Examples
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Setup with Tailscale (recommended):
+#   export TAILSCALE_AUTH_KEY="tskey-auth-xxxxx-yyyyyyyyyyy"
+#   quants-infra security setup --config security_with_tailscale.yml
+#
+# Setup without VPN (backward compatible):
+#   Edit this file and set: vpn: none
+#   quants-infra security setup --config security_with_tailscale.yml
+#
+# Override parameters via CLI:
+#   quants-infra security setup --config security_with_tailscale.yml \
+#     --ssh-port 22 \
+#     --tailscale-routes "10.0.0.0/24"
+#
+# Environment Variables:
+#   TAILSCALE_AUTH_KEY: Tailscale authentication key (required for vpn: tailscale)
+#   INSTANCE_NAME: Override instance_name
+#   SSH_KEY_PATH: Override ssh_key
+#   AWS_REGION: Override region
+#
+# After deployment, connect via Tailscale:
+#   ssh -i ~/.ssh/lightsail_key.pem ubuntu@<tailscale-ip> -p 6677
+#
+# Get Tailscale IP:
+#   tailscale status | grep data-collector-01
+#
+

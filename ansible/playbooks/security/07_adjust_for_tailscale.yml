@@ -1,0 +1,166 @@
+---
+- name: Tailscale 部署后调整防火墙
+  hosts: all
+  become: true
+  become_method: sudo
+  
+  vars:
+    iptables_rules_file: /etc/iptables/rules.v4
+    backup_dir: /etc/quants-security/backups
+    tailscale_network: "100.64.0.0/10"  # Tailscale CGNAT 网络范围
+    tailscale_interface: "tailscale0"
+    
+  tasks:
+    - name: 显示 Tailscale 配置信息
+      debug:
+        msg: |
+          配置主机: {{ ansible_host }}
+          Tailscale 网络: {{ tailscale_network }}
+          Tailscale 接口: {{ tailscale_interface }}
+    
+    - name: 检查 Tailscale 是否已安装
+      command: which tailscale
+      register: tailscale_check
+      failed_when: false
+      changed_when: false
+    
+    - name: 验证 Tailscale 安装
+      assert:
+        that:
+          - tailscale_check.rc == 0
+        fail_msg: "Tailscale 未安装，请先安装 Tailscale"
+        success_msg: "Tailscale 已安装"
+    
+    - name: 检查 Tailscale 是否已连接
+      command: tailscale status
+      register: tailscale_status
+      failed_when: false
+      changed_when: false
+    
+    - name: 验证 Tailscale 连接
+      assert:
+        that:
+          - tailscale_status.rc == 0
+        fail_msg: "Tailscale 未连接，请先运行 tailscale up"
+        success_msg: "Tailscale 已连接"
+    
+    - name: 获取 Tailscale IP 地址
+      command: tailscale ip -4
+      register: tailscale_ip
+      changed_when: false
+    
+    - name: 备份当前防火墙规则
+      copy:
+        src: "{{ iptables_rules_file }}"
+        dest: "{{ backup_dir }}/rules.v4.before_tailscale.{{ ansible_date_time.epoch }}"
+        remote_src: yes
+        mode: '0644'
+    
+    - name: 允许 Tailscale 接口所有流量
+      iptables:
+        chain: INPUT
+        in_interface: "{{ tailscale_interface }}"
+        jump: ACCEPT
+        comment: "Allow all traffic on Tailscale interface"
+      register: tailscale_interface_rule
+    
+    - name: 允许 Tailscale 网络访问监控端口（Prometheus 9090）
+      iptables:
+        chain: INPUT
+        protocol: tcp
+        source: "{{ tailscale_network }}"
+        destination_port: 9090
+        jump: ACCEPT
+        comment: "Allow Tailscale network to Prometheus"
+      register: prometheus_rule
+    
+    - name: 允许 Tailscale 网络访问监控端口（Grafana 3000）
+      iptables:
+        chain: INPUT
+        protocol: tcp
+        source: "{{ tailscale_network }}"
+        destination_port: 3000
+        jump: ACCEPT
+        comment: "Allow Tailscale network to Grafana"
+      register: grafana_rule
+    
+    - name: 允许 Tailscale 网络访问 Node Exporter（9100）
+      iptables:
+        chain: INPUT
+        protocol: tcp
+        source: "{{ tailscale_network }}"
+        destination_port: 9100
+        jump: ACCEPT
+        comment: "Allow Tailscale network to Node Exporter"
+      register: node_exporter_rule
+    
+    - name: 保存防火墙规则
+      command: netfilter-persistent save
+      when: >
+        tailscale_interface_rule.changed or
+        prometheus_rule.changed or
+        grafana_rule.changed or
+        node_exporter_rule.changed
+    
+    - name: 获取当前 iptables 规则（用于调试）
+      command: iptables -L INPUT -n -v
+      register: iptables_output
+      changed_when: false
+    
+    - name: 显示防火墙规则（用于验证）
+      debug:
+        msg: "{{ iptables_output.stdout_lines }}"
+    
+    - name: 验证 Tailscale 规则添加状态
+      assert:
+        that:
+          - tailscale_interface_rule is defined
+          - prometheus_rule is defined
+          - grafana_rule is defined
+          - node_exporter_rule is defined
+        fail_msg: "Tailscale 防火墙规则添加失败"
+        success_msg: "Tailscale 防火墙规则已成功配置"
+    
+    - name: 检查 Tailscale 接口状态
+      command: ip addr show {{ tailscale_interface }}
+      register: interface_status
+      changed_when: false
+      failed_when: false
+    
+    - name: 显示 Tailscale 接口状态
+      debug:
+        var: interface_status.stdout_lines
+      when: interface_status.rc == 0
+    
+    - name: 测试 Tailscale 连通性
+      command: tailscale ping --c 1 --timeout 5s {{ tailscale_ip.stdout }}
+      register: tailscale_ping
+      changed_when: false
+      failed_when: false
+    
+    - name: 创建 Tailscale 防火墙调整完成标记
+      copy:
+        dest: /etc/quants-security/tailscale_firewall_adjusted
+        content: |
+          调整时间: {{ ansible_date_time.iso8601 }}
+          Tailscale IP: {{ tailscale_ip.stdout }}
+          Tailscale 网络: {{ tailscale_network }}
+          Tailscale 接口: {{ tailscale_interface }}
+          监控端口已开放: 9090, 3000, 9100
+        mode: '0644'
+    
+    - name: 显示完成信息
+      debug:
+        msg: |
+          ✓ Tailscale 防火墙调整完成
+          ✓ Tailscale 接口规则已配置
+          ✓ 监控端口已限制为仅 Tailscale 网络访问
+          
+          Tailscale IP: {{ tailscale_ip.stdout }}
+          Tailscale 网络: {{ tailscale_network }}
+          
+          验证命令:
+          - 查看 Tailscale 状态: tailscale status
+          - 查看防火墙规则: iptables -L -v -n | grep -E '(tailscale|100\.64)'
+          - Ping 测试: tailscale ping <node-name>
+

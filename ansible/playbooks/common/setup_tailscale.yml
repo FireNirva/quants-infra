@@ -1,0 +1,95 @@
+---
+- name: 配置 Tailscale VPN
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: true
+  
+  vars:
+    tailscale_auth_key: ""  # 必须通过 extra_vars 提供
+    tailscale_advertise_routes: ""  # 可选，通告的子网路由
+    tailscale_accept_routes: true  # 是否接受其他节点的路由
+  
+  tasks:
+    - name: 确保必需变量已设置
+      fail:
+        msg: "tailscale_auth_key 是必需的"
+      when: tailscale_auth_key == ""
+    
+    - name: 添加 Tailscale GPG 密钥
+      apt_key:
+        url: https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg
+        state: present
+      register: gpg_result
+      retries: 3
+      delay: 5
+      until: gpg_result is success
+    
+    - name: 添加 Tailscale 软件仓库
+      apt_repository:
+        repo: "deb https://pkgs.tailscale.com/stable/ubuntu {{ ansible_distribution_release }} main"
+        state: present
+        filename: tailscale
+        update_cache: true
+    
+    - name: 安装 Tailscale
+      apt:
+        name: tailscale
+        state: present
+        update_cache: true
+      register: install_result
+      retries: 3
+      delay: 5
+      until: install_result is success
+    
+    - name: 构建 Tailscale up 命令参数
+      set_fact:
+        tailscale_args: >-
+          --auth-key={{ tailscale_auth_key }}
+          {% if tailscale_accept_routes %}--accept-routes{% endif %}
+          {% if tailscale_advertise_routes %}--advertise-routes={{ tailscale_advertise_routes }}{% endif %}
+    
+    - name: 启动 Tailscale
+      command: tailscale up {{ tailscale_args }}
+      register: tailscale_up
+      changed_when: tailscale_up.rc == 0
+      failed_when: tailscale_up.rc != 0
+    
+    - name: 等待 Tailscale 连接建立
+      wait_for:
+        timeout: 10
+      delegate_to: localhost
+      become: no
+    
+    - name: 获取 Tailscale 状态
+      command: tailscale status
+      register: tailscale_status
+      changed_when: false
+    
+    - name: 获取 Tailscale IPv4 地址
+      command: tailscale ip -4
+      register: tailscale_ipv4
+      changed_when: false
+    
+    - name: 获取 Tailscale IPv6 地址
+      command: tailscale ip -6
+      register: tailscale_ipv6
+      changed_when: false
+      ignore_errors: true
+    
+    - name: 验证 Tailscale 服务状态
+      systemd:
+        name: tailscaled
+        state: started
+        enabled: true
+      register: service_status
+    
+    - name: 显示 Tailscale 配置信息
+      debug:
+        msg:
+          - "Tailscale 安装完成"
+          - "IPv4 地址: {{ tailscale_ipv4.stdout }}"
+          - "IPv6 地址: {{ tailscale_ipv6.stdout if tailscale_ipv6.rc == 0 else 'N/A' }}"
+          - "状态: {{ tailscale_status.stdout_lines[0] if tailscale_status.stdout_lines | length > 0 else 'N/A' }}"
+          - "服务状态: {{ 'active' if service_status.status.ActiveState == 'active' else service_status.status.ActiveState }}"
+
