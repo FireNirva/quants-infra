@@ -474,55 +474,85 @@ class TestDataLakeRealE2E:
         # 查看应用日志（stdout/stderr）
         print("\n查看应用日志文件...")
         app_log_cmd = """
-        if [ -f /opt/quants-lab/logs/app.log ]; then
-            echo '=== App Log (last 50 lines) ===' && tail -50 /opt/quants-lab/logs/app.log
-        elif [ -f /var/log/quants-lab/gateio-collector.log ]; then
-            echo '=== Collector Log (last 50 lines) ===' && tail -50 /var/log/quants-lab/gateio-collector.log
+        echo '=== STDOUT Log (last 100 lines) ===' && \
+        if [ -f /var/log/quants-lab/gateio-collector.log ]; then
+            tail -100 /var/log/quants-lab/gateio-collector.log
         else
-            echo 'No application log files found'
-            echo 'Checking journalctl for detailed logs...'
-            journalctl -u quants-lab-gateio-collector -n 100 --no-pager
-        fi
+            echo 'STDOUT log not found'
+        fi && \
+        echo '' && \
+        echo '=== STDERR Log (last 100 lines) ===' && \
+        if [ -f /var/log/quants-lab/gateio-collector-error.log ]; then
+            tail -100 /var/log/quants-lab/gateio-collector-error.log
+        else
+            echo 'STDERR log not found'
+        fi && \
+        echo '' && \
+        echo '=== Systemd Journal (last 50 lines) ===' && \
+        journalctl -u quants-lab-gateio-collector -n 50 --no-pager
         """
         app_log_result = run_ssh_command(
             collector_ip,
             app_log_cmd,
             test_config['ssh_key_path'],
-            timeout=20
+            timeout=30
         )
         if app_log_result['success']:
-            print(f"应用日志:\n{app_log_result['stdout']}")
+            print(f"完整应用日志:\n{app_log_result['stdout']}")
         
-        # 尝试通过 API 触发任务
-        print("\n尝试触发 orderbook_tick_gateio 任务...")
-        trigger_cmd = "curl -X POST http://127.0.0.1:8500/api/v1/tasks/orderbook_tick_gateio/start || echo 'API trigger failed or not supported'"
-        trigger_result = run_ssh_command(
+        # 检查环境变量和配置
+        print("\n检查环境变量和配置...")
+        env_check_cmd = """
+        echo '=== Environment Variables ===' && \
+        sudo cat /etc/systemd/system/quants-lab-gateio-collector.service | grep -E 'Environment=' && \
+        echo '' && \
+        echo '=== Config File ===' && \
+        cat /opt/quants-lab/config/orderbook_tick_gateio.yml && \
+        echo '' && \
+        echo '=== Python Process Environment ===' && \
+        sudo cat /proc/$(pgrep -f 'cli.py run-tasks')/environ | tr '\\0' '\\n' | grep -E 'MONGO|PATH|PYTHON' | head -10
+        """
+        env_result = run_ssh_command(
             collector_ip,
-            trigger_cmd,
+            env_check_cmd,
             test_config['ssh_key_path']
         )
-        if trigger_result['success']:
-            print(f"触发结果:\n{trigger_result['stdout']}")
+        if env_result['success']:
+            print(f"环境信息:\n{env_result['stdout']}")
         
         print_step(3, 3, f"等待收集数据 ({test_config['collect_duration_seconds']} 秒)")
         print("📝 注意：现在使用 run-tasks 命令，会实际运行数据采集任务")
         
-        # 等待 60 秒后首次检查（run-tasks 需要更多启动时间）
-        wait_time = 60
+        # 等待 30 秒后首次检查
+        wait_time = 30
         time.sleep(wait_time)
-        print(f"\n检查数据采集状态（{wait_time}秒后）...")
+        print(f"\n首次检查数据采集状态（{wait_time}秒后）...")
+        
+        # 检查 metrics 是否有实际数据
         status_metrics_cmd = "curl -s http://127.0.0.1:8000/metrics | grep -E 'orderbook_collector_(connection_status|messages_received_total|ticks_written_total)' | grep -v '^#'"
         status_result = run_ssh_command(collector_ip, status_metrics_cmd, test_config['ssh_key_path'])
         if status_result['success']:
             status_output = status_result['stdout'].strip()
             if status_output:
-                print(f"当前状态:\n{status_output}")
+                print(f"当前 Metrics 状态:\n{status_output}")
             else:
-                print("⚠️  Metrics 中没有实际数值 - collector 可能还在启动中")
+                print("⚠️  Metrics 中没有实际数值")
+                # 如果没有 metrics，检查应用是否真的在运行任务
+                print("\n检查应用是否真的在运行任务...")
+                check_cmd = """
+                echo '=== Process status ===' && \
+                ps aux | grep '[c]li.py' && \
+                echo '' && \
+                echo '=== Recent application logs (last 30 lines) ===' && \
+                journalctl -u quants-lab-gateio-collector --since '30 seconds ago' --no-pager | tail -30
+                """
+                check_result = run_ssh_command(collector_ip, check_cmd, test_config['ssh_key_path'])
+                if check_result['success']:
+                    print(f"诊断信息:\n{check_result['stdout']}")
         
         # 继续等待剩余时间
         remaining_time = test_config['collect_duration_seconds'] - wait_time
-        print(f"继续等待 {remaining_time} 秒...")
+        print(f"\n继续等待 {remaining_time} 秒...")
         time.sleep(remaining_time)
         
         # 最后再检查一次状态
@@ -531,7 +561,7 @@ class TestDataLakeRealE2E:
         if final_status_result['success']:
             final_output = final_status_result['stdout'].strip()
             if final_output:
-                print(f"最终状态:\n{final_output}")
+                print(f"最终 Metrics 状态:\n{final_output}")
         
         print_success("数据收集完成")
         
