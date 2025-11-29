@@ -171,7 +171,7 @@ def test_config(run_e2e):
         # 数据采集器配置
         'exchange': 'gateio',
         'pairs': ['VIRTUAL-USDT'],  # 只测试一个交易对
-        'collect_duration_seconds': 90,  # 收集 90 秒数据
+        'collect_duration_seconds': 180,  # 增加到 180 秒以确保有足够时间收集数据
         'collector_github_repo': 'https://github.com/FireNirva/hummingbot-quants-lab.git',
         'collector_github_branch': 'main',
         
@@ -188,7 +188,7 @@ def test_config(run_e2e):
         # 超时配置
         'instance_ready_timeout': 300,
         'collector_start_timeout': 180,
-        'data_collection_timeout': 120,
+        'data_collection_timeout': 240,  # 增加超时以匹配新的收集时间
         
         # 清理配置
         'cleanup_on_failure': False,  # 失败时不清理，便于调试
@@ -505,10 +505,12 @@ class TestDataLakeRealE2E:
             print(f"触发结果:\n{trigger_result['stdout']}")
         
         print_step(3, 3, f"等待收集数据 ({test_config['collect_duration_seconds']} 秒)")
+        print("📝 注意：现在使用 run-tasks 命令，会实际运行数据采集任务")
         
-        # 等待 30 秒后检查一次连接状态
-        time.sleep(30)
-        print("\n检查数据采集状态（30秒后）...")
+        # 等待 60 秒后首次检查（run-tasks 需要更多启动时间）
+        wait_time = 60
+        time.sleep(wait_time)
+        print(f"\n检查数据采集状态（{wait_time}秒后）...")
         status_metrics_cmd = "curl -s http://127.0.0.1:8000/metrics | grep -E 'orderbook_collector_(connection_status|messages_received_total|ticks_written_total)' | grep -v '^#'"
         status_result = run_ssh_command(collector_ip, status_metrics_cmd, test_config['ssh_key_path'])
         if status_result['success']:
@@ -516,26 +518,46 @@ class TestDataLakeRealE2E:
             if status_output:
                 print(f"当前状态:\n{status_output}")
             else:
-                print("⚠️  Metrics 中没有实际数值 - collector 可能未启动或未连接")
+                print("⚠️  Metrics 中没有实际数值 - collector 可能还在启动中")
         
         # 继续等待剩余时间
-        remaining_time = test_config['collect_duration_seconds'] - 30
+        remaining_time = test_config['collect_duration_seconds'] - wait_time
         print(f"继续等待 {remaining_time} 秒...")
         time.sleep(remaining_time)
+        
+        # 最后再检查一次状态
+        print("\n最终状态检查...")
+        final_status_result = run_ssh_command(collector_ip, status_metrics_cmd, test_config['ssh_key_path'])
+        if final_status_result['success']:
+            final_output = final_status_result['stdout'].strip()
+            if final_output:
+                print(f"最终状态:\n{final_output}")
+        
         print_success("数据收集完成")
         
         # 验证数据文件存在（查找 parquet 或 csv 文件）
+        # 增加重试机制，因为文件可能在刚好收集完成后才写入
         print("\n验证数据文件...")
         check_cmd = f"find {test_config['collector_data_root']} -type f \\( -name '*.parquet' -o -name '*.csv' \\) 2>/dev/null | head -10"
-        result = run_ssh_command(
-            collector_ip,
-            check_cmd,
-            test_config['ssh_key_path']
-        )
         
-        if result['success']:
-            files = result['stdout'].strip()
-            if files:
+        # 最多重试3次，每次等待10秒
+        max_retries = 3
+        files = ""
+        for attempt in range(max_retries):
+            result = run_ssh_command(
+                collector_ip,
+                check_cmd,
+                test_config['ssh_key_path']
+            )
+            if result['success']:
+                files = result['stdout'].strip()
+                if files:
+                    break
+            if attempt < max_retries - 1:
+                print(f"尝试 {attempt + 1}/{max_retries}: 未找到文件，等待10秒后重试...")
+                time.sleep(10)
+        
+        if files:
                 print(f"找到数据文件 (parquet/csv):\n{files}")
                 
                 # 统计文件数量和大小
@@ -549,28 +571,26 @@ class TestDataLakeRealE2E:
                     print(f"统计信息:\n{count_result['stdout']}")
                 
                 print_success("数据文件验证通过")
-            else:
-                # 数据文件不存在，打印更多诊断信息
-                print_error("没有找到数据文件（parquet/csv）")
-                
-                # 检查目录内容
-                ls_cmd = f"ls -lhR {test_config['collector_data_root']}"
-                ls_result = run_ssh_command(collector_ip, ls_cmd, test_config['ssh_key_path'])
-                print(f"目录内容:\n{ls_result['stdout']}")
-                
-                # 再次检查进程和日志
-                ps_cmd = "ps aux | grep '[c]li.py serve'"
-                ps_result = run_ssh_command(collector_ip, ps_cmd, test_config['ssh_key_path'])
-                print(f"进程状态:\n{ps_result['stdout']}")
-                
-                # 查看服务状态
-                status_cmd = "systemctl status quants-lab-gateio-collector --no-pager"
-                status_result = run_ssh_command(collector_ip, status_cmd, test_config['ssh_key_path'])
-                print(f"服务状态:\n{status_result['stdout']}")
-                
-                pytest.fail("Data Collector 没有收集到数据文件")
         else:
-            pytest.fail(f"无法验证数据文件: {result['stderr']}")
+            # 数据文件不存在，打印更多诊断信息
+            print_error("没有找到数据文件（parquet/csv）")
+            
+            # 检查目录内容
+            ls_cmd = f"ls -lhR {test_config['collector_data_root']}"
+            ls_result = run_ssh_command(collector_ip, ls_cmd, test_config['ssh_key_path'])
+            print(f"目录内容:\n{ls_result['stdout']}")
+            
+            # 再次检查进程和日志
+            ps_cmd = "ps aux | grep '[c]li.py'"
+            ps_result = run_ssh_command(collector_ip, ps_cmd, test_config['ssh_key_path'])
+            print(f"进程状态:\n{ps_result['stdout']}")
+            
+            # 查看服务状态
+            status_cmd = "systemctl status quants-lab-gateio-collector --no-pager"
+            status_result = run_ssh_command(collector_ip, status_cmd, test_config['ssh_key_path'])
+            print(f"服务状态:\n{status_result['stdout']}")
+            
+            pytest.fail("Data Collector 没有收集到数据文件")
         
         print("\n✅ 测试 1 通过\n")
     
