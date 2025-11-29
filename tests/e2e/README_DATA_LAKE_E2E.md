@@ -7,6 +7,41 @@ Data Lake 提供两种 E2E 测试模式：
 1. **本地测试模式** - 使用本地文件系统，无需 AWS 资源
 2. **真实 E2E 测试模式** - 使用两台 Lightsail 实例进行真实环境测试
 
+## 🚀 快速开始
+
+### 从 GitHub 克隆项目
+
+```bash
+# 克隆仓库
+git clone https://github.com/FireNirva/quants-infra.git
+cd quants-infra
+
+# 创建并激活 Conda 环境
+conda env create -f environment.yml
+conda activate quants-infra
+
+# 安装项目依赖
+pip install -e .
+
+# 验证安装
+quants-infra --version
+```
+
+### 运行 Data Lake 测试
+
+```bash
+# 方式 1: 使用测试脚本（推荐）
+bash tests/e2e/scripts/run_data_lake.sh
+# 选择测试模式：1) 本地测试 或 2) 真实 E2E 测试
+
+# 方式 2: 直接使用 pytest
+pytest tests/e2e/test_data_lake.py -v -s --run-e2e
+
+# 方式 3: 使用 Data Lake CLI 命令
+quants-infra data-lake validate --config config/data_lake.example.yml
+quants-infra data-lake stats test_profile
+```
+
 ## 🎯 测试模式
 
 ### 模式 1: 本地测试（默认）
@@ -106,18 +141,18 @@ bash tests/e2e/scripts/run_data_lake.sh
 pytest tests/e2e/test_data_lake_real.py -v -s --run-e2e
 ```
 
-## 📦 前置要求
+## 📦 前置要求与安装
 
-### 本地测试要求
+### 系统要求
 
+**本地测试要求：**
 - Python 3.8+
 - rsync 工具
 - SSH 客户端
 - pytest 测试框架
-- Conda 环境 (quants-infra)
+- Conda 或 virtualenv
 
-### 真实 E2E 测试额外要求
-
+**真实 E2E 测试额外要求：**
 - AWS 凭证已配置
 - AWS Lightsail 配额充足
 - SSH 密钥文件（以下之一）：
@@ -125,23 +160,91 @@ pytest tests/e2e/test_data_lake_real.py -v -s --run-e2e
   - `~/.ssh/LightsailDefaultKey-ap-northeast-1.pem`
   - `~/.ssh/id_rsa`
 
-### 安装依赖
+### 完整安装步骤
+
+#### 1. 克隆项目
 
 ```bash
-# 激活 conda 环境
+# 从 GitHub 克隆
+git clone https://github.com/FireNirva/quants-infra.git
+cd quants-infra
+```
+
+#### 2. 设置 Python 环境
+
+**使用 Conda（推荐）：**
+```bash
+# 创建环境
+conda env create -f environment.yml
+
+# 激活环境
 conda activate quants-infra
 
-# 安装项目依赖
+# 验证环境
+python --version
+```
+
+**或使用 virtualenv：**
+```bash
+# 创建虚拟环境
+python3 -m venv venv
+
+# 激活虚拟环境
+source venv/bin/activate  # macOS/Linux
+# 或 venv\Scripts\activate  # Windows
+
+# 升级 pip
+pip install --upgrade pip
+```
+
+#### 3. 安装项目依赖
+
+```bash
+# 安装项目（开发模式）
 pip install -e .
 
-# 安装 AWS 依赖（真实 E2E 测试需要）
-pip install boto3
+# 验证安装
+quants-infra --version
+quants-infra data-lake --help
+```
 
-# macOS 安装 rsync
+#### 4. 安装系统工具
+
+**macOS：**
+```bash
+# 安装 rsync（如果没有）
 brew install rsync
 
-# Ubuntu/Debian 安装 rsync
-sudo apt-get install rsync
+# 安装 AWS CLI（真实 E2E 需要）
+brew install awscli
+```
+
+**Ubuntu/Debian：**
+```bash
+# 更新包列表
+sudo apt-get update
+
+# 安装 rsync
+sudo apt-get install -y rsync
+
+# 安装 AWS CLI（真实 E2E 需要）
+sudo apt-get install -y awscli
+```
+
+#### 5. 验证安装
+
+```bash
+# 检查 Python 包
+python -c "import yaml, pydantic, click; print('✓ 核心依赖已安装')"
+
+# 检查 rsync
+rsync --version
+
+# 检查 pytest
+pytest --version
+
+# 检查 Data Lake 模块
+python -c "from core.data_lake.manager import DataLakeManager; print('✓ Data Lake 模块可用')"
 ```
 
 ### AWS 凭证配置
@@ -165,9 +268,16 @@ export TEST_AWS_REGION=ap-northeast-1
 
 ## 🚀 运行测试
 
-### 交互式运行（推荐）
+### 方法 1: 使用测试脚本（最简单）
 
 ```bash
+# 进入项目目录
+cd quants-infra
+
+# 确保环境已激活
+conda activate quants-infra
+
+# 运行测试脚本
 bash tests/e2e/scripts/run_data_lake.sh
 ```
 
@@ -191,17 +301,124 @@ bash tests/e2e/scripts/run_data_lake.sh
 请选择 (1/2, 默认 1): 
 ```
 
-### 直接运行特定测试
+### 方法 2: 使用 pytest 直接运行
 
 ```bash
-# 本地测试
+# 本地测试（推荐先运行）
 pytest tests/e2e/test_data_lake.py -v -s --run-e2e
 
-# 真实 E2E 测试
+# 真实 E2E 测试（需要 AWS 凭证）
 pytest tests/e2e/test_data_lake_real.py -v -s --run-e2e
 
 # 运行特定测试用例
+pytest tests/e2e/test_data_lake.py::TestDataLakeE2E::test_01_config_validation -v -s --run-e2e
+
+# 运行真实 E2E 的特定测试
 pytest tests/e2e/test_data_lake_real.py::TestDataLakeRealE2E::test_01_deploy_data_collector -v -s --run-e2e
+```
+
+### 方法 3: 使用 Data Lake CLI 命令
+
+Data Lake 提供了完整的 CLI 接口，可以直接使用：
+
+#### 创建配置文件
+
+```bash
+# 复制示例配置
+cp config/data_lake.example.yml config/data_lake.yml
+
+# 编辑配置（修改 host、user、remote_root 等）
+vim config/data_lake.yml
+# 或
+nano config/data_lake.yml
+```
+
+#### 验证配置
+
+```bash
+# 验证配置文件是否正确
+quants-infra data-lake validate
+
+# 使用自定义配置文件
+quants-infra data-lake validate --config config/data_lake.yml
+```
+
+#### 查看统计信息
+
+```bash
+# 查看单个 profile 统计
+quants-infra data-lake stats cex_ticks
+
+# 查看所有 profiles 统计
+quants-infra data-lake stats --all
+
+# 输出 JSON 格式
+quants-infra data-lake stats cex_ticks --format json
+```
+
+#### 同步数据
+
+```bash
+# 同步单个 profile
+quants-infra data-lake sync cex_ticks
+
+# 同步所有启用的 profiles
+quants-infra data-lake sync --all
+
+# Dry-run 模式（仅显示将要执行的操作）
+quants-infra data-lake sync cex_ticks --dry-run
+```
+
+#### 清理旧数据
+
+```bash
+# 手动清理单个 profile
+quants-infra data-lake cleanup cex_ticks
+
+# 清理所有 profiles
+quants-infra data-lake cleanup --all
+
+# Dry-run 模式查看将要删除的数据
+quants-infra data-lake cleanup cex_ticks --dry-run
+```
+
+#### 测试连接
+
+```bash
+# 测试到远程主机的 SSH 连接
+quants-infra data-lake test-connection cex_ticks
+```
+
+### 完整使用示例
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/FireNirva/quants-infra.git
+cd quants-infra
+
+# 2. 设置环境
+conda activate quants-infra
+pip install -e .
+
+# 3. 创建配置
+cp config/data_lake.example.yml config/data_lake.yml
+# 编辑 config/data_lake.yml，设置你的远程主机信息
+
+# 4. 验证配置
+quants-infra data-lake validate
+
+# 5. 测试连接
+quants-infra data-lake test-connection cex_ticks
+
+# 6. 同步数据
+quants-infra data-lake sync cex_ticks
+
+# 7. 查看统计
+quants-infra data-lake stats cex_ticks
+
+# 8. 清理旧数据（可选）
+quants-infra data-lake cleanup cex_ticks --dry-run
+quants-infra data-lake cleanup cex_ticks
 ```
 
 ## 📊 测试输出
@@ -304,9 +521,70 @@ cat tests/e2e/logs/data_lake_20241129_103045_summary.txt
 
 ## 🐛 故障排除
 
+### 安装和克隆问题
+
+#### 问题 1: Git clone 失败
+
+**错误信息：**
+```
+fatal: unable to access 'https://github.com/FireNirva/quants-infra.git/': ...
+```
+
+**解决方法：**
+```bash
+# 检查网络连接
+ping github.com
+
+# 使用 SSH 方式克隆（如果配置了 SSH key）
+git clone git@github.com:FireNirva/quants-infra.git
+
+# 或设置代理（如果需要）
+git config --global http.proxy http://proxy.example.com:8080
+```
+
+#### 问题 2: 依赖安装失败
+
+**错误信息：**
+```
+ERROR: Could not install packages due to an EnvironmentError
+```
+
+**解决方法：**
+```bash
+# 升级 pip
+pip install --upgrade pip
+
+# 使用国内镜像源（如果在中国）
+pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 或逐个安装依赖
+pip install pyyaml pydantic click pytest boto3
+```
+
+#### 问题 3: quants-infra 命令未找到
+
+**错误信息：**
+```
+bash: quants-infra: command not found
+```
+
+**解决方法：**
+```bash
+# 确保已安装项目
+cd quants-infra
+pip install -e .
+
+# 验证安装
+which quants-infra
+python -m cli.main --help
+
+# 或直接使用 Python 模块方式
+python -m cli.main data-lake --help
+```
+
 ### 本地测试问题
 
-#### 问题 1: Conda 环境未激活
+#### 问题 4: Conda 环境未激活
 
 **错误信息：**
 ```
