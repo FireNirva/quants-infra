@@ -15,6 +15,19 @@
 # 更新环境:
 #   conda env update -f environment.yml --prune
 #
+# ⚠️ 系统依赖要求（需单独安装）:
+#   - rsync (必需) - Data Lake 数据同步核心工具
+#     macOS:   brew install rsync
+#     Ubuntu:  sudo apt-get install rsync
+#     RHEL/CentOS: sudo yum install rsync
+#
+#   - ssh (必需) - 远程连接工具
+#     通常系统已预装
+#
+#   - aws-cli (可选) - 用于 AWS 资源管理和真实 E2E 测试
+#     macOS:   brew install awscli
+#     Ubuntu:  sudo apt-get install awscli
+#
 name: quants-infra
 channels:
   - conda-forge

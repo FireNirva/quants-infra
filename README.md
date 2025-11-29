@@ -21,38 +21,62 @@
 
 ## ⚡ 5分钟快速开始
 
+### 前置要求
+
+确保系统已安装以下工具：
+- **rsync** (必需) - Data Lake 数据同步
+- **ssh** (必需) - 远程连接
+- **git** (必需) - 克隆代码
+
+```bash
+# macOS 安装
+brew install rsync git
+
+# Ubuntu/Debian 安装
+sudo apt-get install rsync git openssh-client
+
+# 或使用检查脚本（克隆项目后）
+bash scripts/utils/check_system_deps.sh
+```
+
+### 安装步骤
+
 ```bash
 # 1. 克隆项目
 git clone https://github.com/FireNirva/quants-infra.git
 cd quants-infra
 
-# 2. 创建并激活环境
+# 2. 检查系统依赖（推荐）
+bash scripts/utils/check_system_deps.sh
+
+# 3. 创建并激活环境
 conda env create -f environment.yml
 conda activate quants-infra
 
-# 3. 安装项目
+# 4. 安装项目
 pip install -e .
 
-# 4. 验证安装
+# 5. 验证安装
 quants-infra --version
 quants-infra --help
+bash scripts/utils/verify_github_setup.sh
 
-# 5. 配置AWS凭证（如需使用云服务）
+# 6. 配置AWS凭证（如需使用云服务）
 aws configure
 
-# 6. 创建Lightsail实例（带静态IP）⭐
+# 7. 创建Lightsail实例（带静态IP）⭐
 quants-infra infra create \
   --name my-bot-01 \
   --bundle nano_3_0 \
   --region ap-northeast-1 \
   --use-static-ip  # IP地址永久不变！
 
-# 7. 应用安全配置
+# 8. 应用安全配置
 quants-infra security setup \
   --instance-ip <YOUR_IP> \
   --profile execution
 
-# 8. 或使用 Data Lake 同步数据 ⭐ NEW
+# 9. 或使用 Data Lake 同步数据 ⭐ NEW
 cp config/data_lake.example.yml config/data_lake.yml
 # 编辑配置文件，设置远程主机信息
 quants-infra data-lake sync cex_ticks
