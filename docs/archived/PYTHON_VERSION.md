@@ -56,7 +56,7 @@ pip install -e .
 
 ```bash
 python --version  # 应该显示 3.11.x
-quants-ctl --version
+quants-infra --version
 pytest tests/ -v
 ```
 

@@ -14,7 +14,7 @@
 
 - ✅ 管理现有 Lightsail 实例
 - ✅ 通过 Terraform 自动创建/销毁实例
-- ✅ 通过 `quants-ctl` 统一管理生命周期
+- ✅ 通过 `quants-infra` 统一管理生命周期
 - ✅ 与现有 Ansible 部署系统完全兼容
 
 ---
@@ -85,11 +85,11 @@
 #### 3.1 Infrastructure 命令组
 - **文件**: `infrastructure/cli/commands/infra.py`
 - **命令**:
-  - `quants-ctl infra create` - 创建实例
-  - `quants-ctl infra list` - 列出实例
-  - `quants-ctl infra info` - 查看详情
-  - `quants-ctl infra manage` - 生命周期管理
-  - `quants-ctl infra destroy` - 销毁实例
+  - `quants-infra infra create` - 创建实例
+  - `quants-infra infra list` - 列出实例
+  - `quants-infra infra info` - 查看详情
+  - `quants-infra infra manage` - 生命周期管理
+  - `quants-infra infra destroy` - 销毁实例
 - **特性**:
   - 彩色输出（使用 colorama）
   - 表格格式（使用 tabulate）
@@ -185,7 +185,7 @@ conda activate quants-infra
 aws configure --profile lightsail
 
 # 3. 创建实例
-quants-ctl infra create \\
+quants-infra infra create \\
   --name dev-collector-1 \\
   --bundle small_3_0 \\
   --region ap-northeast-1
@@ -209,16 +209,16 @@ terraform apply
 
 ```bash
 # 列出所有实例
-quants-ctl infra list
+quants-infra infra list
 
 # 查看详情
-quants-ctl infra info --name dev-collector-1
+quants-infra infra info --name dev-collector-1
 
 # 停止实例
-quants-ctl infra manage --name dev-collector-1 --action stop
+quants-infra infra manage --name dev-collector-1 --action stop
 
 # 销毁实例
-quants-ctl infra destroy --name dev-collector-1
+quants-infra infra destroy --name dev-collector-1
 ```
 
 ---

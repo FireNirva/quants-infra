@@ -26,10 +26,10 @@
 影响的命令：
 ```bash
 # 所有这些命令都会失败
-quants-ctl monitor start --service prometheus --host <IP>
-quants-ctl monitor stop --service grafana --host <IP>
-quants-ctl monitor restart --service alertmanager --host <IP>
-quants-ctl monitor logs --service prometheus --host <IP>
+quants-infra monitor start --service prometheus --host <IP>
+quants-infra monitor stop --service grafana --host <IP>
+quants-infra monitor restart --service alertmanager --host <IP>
+quants-infra monitor logs --service prometheus --host <IP>
 ```
 
 #### 根本原因
@@ -256,8 +256,8 @@ if success:
    - 不应在监控实例部署时硬编码
 
 3. **职责分离**
-   - 监控实例部署：`quants-ctl monitor deploy`
-   - 添加采集器目标：`quants-ctl monitor add-target`
+   - 监控实例部署：`quants-infra monitor deploy`
+   - 添加采集器目标：`quants-infra monitor add-target`
    - 两个独立操作，便于管理
 
 4. **配置可追溯性**
@@ -315,22 +315,22 @@ extra_vars = {
 
 ```bash
 # 部署监控栈
-quants-ctl monitor deploy --host <IP> --grafana-password <PWD>
+quants-infra monitor deploy --host <IP> --grafana-password <PWD>
 
 # 停止 Prometheus
-quants-ctl monitor stop --service prometheus --host <IP>
+quants-infra monitor stop --service prometheus --host <IP>
 # 应该成功停止容器
 
 # 查看 Prometheus 日志
-quants-ctl monitor logs --service prometheus --host <IP> --lines 50
+quants-infra monitor logs --service prometheus --host <IP> --lines 50
 # 应该显示容器日志
 
 # 重启 Prometheus
-quants-ctl monitor restart --service prometheus --host <IP>
+quants-infra monitor restart --service prometheus --host <IP>
 # 应该成功重启容器
 
 # 启动 Prometheus
-quants-ctl monitor start --service prometheus --host <IP>
+quants-infra monitor start --service prometheus --host <IP>
 # 应该成功启动容器
 
 # 验证容器状态
@@ -345,7 +345,7 @@ ssh ubuntu@<IP> -p 6677 docker ps
 ssh ubuntu@<IP> -p 6677 "docker logs -f prometheus" &
 
 # 添加目标
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job test-collector \
   --target 10.0.0.5:8000 \
   --host <IP>
@@ -360,10 +360,10 @@ quants-ctl monitor add-target \
 
 ```bash
 # 部署监控栈
-quants-ctl monitor deploy --host <IP> --grafana-password <PWD>
+quants-infra monitor deploy --host <IP> --grafana-password <PWD>
 
 # 建立隧道
-quants-ctl monitor tunnel --host <IP>
+quants-infra monitor tunnel --host <IP>
 
 # 在另一终端查看初始目标
 curl http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, instance: .labels.instance}'
@@ -374,7 +374,7 @@ curl http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .l
 # 没有其他业务目标
 
 # 添加数据采集器
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job data-collector-gate \
   --target 10.0.0.5:8000 \
   --labels '{"exchange":"gate_io"}' \
@@ -426,7 +426,7 @@ curl http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .l
    ↓
 9. 验证健康状态（通过 SSH）
    ↓
-10. 后续手动添加采集器目标（quants-ctl monitor add-target）
+10. 后续手动添加采集器目标（quants-infra monitor add-target）
 ```
 
 ### 容器管理架构
@@ -496,21 +496,21 @@ Ansible: add_prometheus_target.yml
 ### 短期增强
 1. **批量容器操作**
    ```bash
-   quants-ctl monitor restart-all --host <IP>  # 重启所有监控服务
-   quants-ctl monitor status-all --host <IP>   # 查看所有容器状态
+   quants-infra monitor restart-all --host <IP>  # 重启所有监控服务
+   quants-infra monitor status-all --host <IP>   # 查看所有容器状态
    ```
 
 2. **日志高级功能**
    ```bash
-   quants-ctl monitor logs --service prometheus --follow  # 实时日志
-   quants-ctl monitor logs --service prometheus --since 1h  # 最近1小时
+   quants-infra monitor logs --service prometheus --follow  # 实时日志
+   quants-infra monitor logs --service prometheus --since 1h  # 最近1小时
    ```
 
 3. **目标批量管理**
    ```bash
-   quants-ctl monitor remove-target --job <name>
-   quants-ctl monitor list-targets
-   quants-ctl monitor export-targets --output targets.json
+   quants-infra monitor remove-target --job <name>
+   quants-infra monitor list-targets
+   quants-infra monitor export-targets --output targets.json
    ```
 
 ### 中期优化

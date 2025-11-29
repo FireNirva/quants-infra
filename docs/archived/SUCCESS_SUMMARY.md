@@ -48,7 +48,7 @@
 ### 1️⃣ 创建实例
 
 ```bash
-quants-ctl infra create \
+quants-infra infra create \
   --name prod-execution-01 \
   --blueprint ubuntu_22_04 \
   --bundle nano_3_0
@@ -57,7 +57,7 @@ quants-ctl infra create \
 ### 2️⃣ 应用安全配置
 
 ```bash
-quants-ctl security setup \
+quants-infra security setup \
   --instance-ip <IP> \
   --ssh-user ubuntu \
   --ssh-key ~/.ssh/mykey.pem \
@@ -67,7 +67,7 @@ quants-ctl security setup \
 ### 3️⃣ 验证配置
 
 ```bash
-quants-ctl security verify \
+quants-infra security verify \
   --instance-ip <IP> \
   --ssh-port 6677
 ```

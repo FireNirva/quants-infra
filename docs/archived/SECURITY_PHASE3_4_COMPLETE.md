@@ -74,12 +74,12 @@ execution:
 
 | 命令 | 功能 | 示例 |
 |------|------|------|
-| `setup` | 完整安全配置 | `quants-ctl security setup instance-01 --profile data-collector` |
-| `status` | 查询安全状态 | `quants-ctl security status instance-01` |
-| `verify` | 验证安全配置 | `quants-ctl security verify instance-01` |
-| `adjust-vpn` | VPN 防火墙调整 | `quants-ctl security adjust-vpn instance-01` |
-| `adjust-service` | 服务防火墙调整 | `quants-ctl security adjust-service instance-01 --type data-collector` |
-| `test` | 测试安全配置 | `quants-ctl security test instance-01` |
+| `setup` | 完整安全配置 | `quants-infra security setup instance-01 --profile data-collector` |
+| `status` | 查询安全状态 | `quants-infra security status instance-01` |
+| `verify` | 验证安全配置 | `quants-infra security verify instance-01` |
+| `adjust-vpn` | VPN 防火墙调整 | `quants-infra security adjust-vpn instance-01` |
+| `adjust-service` | 服务防火墙调整 | `quants-infra security adjust-service instance-01 --type data-collector` |
+| `test` | 测试安全配置 | `quants-infra security test instance-01` |
 
 **特性**:
 - 彩色输出 (colorama)
@@ -100,7 +100,7 @@ from cli.commands.security import security
 cli.add_command(security)
 ```
 
-**效果**: 用户现在可以使用 `quants-ctl security <command>` 访问所有安全功能
+**效果**: 用户现在可以使用 `quants-infra security <command>` 访问所有安全功能
 
 #### 5. Deployer 集成
 
@@ -316,7 +316,7 @@ pytest tests/integration/test_security_workflow.py -v
 ### CLI 命令结构
 
 ```
-quants-ctl
+quants-infra
 ├── deploy          # 服务部署
 ├── status          # 状态查询
 ├── logs            # 日志查看
@@ -346,23 +346,23 @@ quants-ctl
 
 ```bash
 # 1. 创建 Lightsail 实例
-quants-ctl infra create data-collector-01 \
+quants-infra infra create data-collector-01 \
   --blueprint ubuntu_22_04 \
   --bundle nano_2_0
 
 # 2. 配置完整安全
-quants-ctl security setup data-collector-01 \
+quants-infra security setup data-collector-01 \
   --profile data-collector \
   --ssh-port 6677
 
 # 3. 部署数据采集服务
-quants-ctl deploy --service data-collector --host data-collector-01
+quants-infra deploy --service data-collector --host data-collector-01
 
 # 4. 验证安全配置
-quants-ctl security verify data-collector-01
+quants-infra security verify data-collector-01
 
 # 5. 查看安全状态
-quants-ctl security status data-collector-01
+quants-infra security status data-collector-01
 ```
 
 ### VPN 网络部署
@@ -372,25 +372,25 @@ quants-ctl security status data-collector-01
 # (使用现有的 WireGuard playbook)
 
 # 2. 调整 VPN 服务器防火墙
-quants-ctl security adjust-vpn vpn-server
+quants-infra security adjust-vpn vpn-server
 
 # 3. 在客户端实例调整防火墙
-quants-ctl security adjust-vpn data-collector-01
-quants-ctl security adjust-vpn monitor-01
-quants-ctl security adjust-vpn bot-01
+quants-infra security adjust-vpn data-collector-01
+quants-infra security adjust-vpn monitor-01
+quants-infra security adjust-vpn bot-01
 ```
 
 ### 服务部署后安全调整
 
 ```bash
 # 数据采集器部署后
-quants-ctl security adjust-service data-collector-01 --type data-collector
+quants-infra security adjust-service data-collector-01 --type data-collector
 
 # 监控系统部署后
-quants-ctl security adjust-service monitor-01 --type monitor
+quants-infra security adjust-service monitor-01 --type monitor
 
 # 交易机器人部署后
-quants-ctl security adjust-service bot-01 --type execution
+quants-infra security adjust-service bot-01 --type execution
 ```
 
 ---

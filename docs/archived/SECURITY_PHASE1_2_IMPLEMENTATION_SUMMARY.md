@@ -153,7 +153,7 @@ infrastructure/
 
 1. **创建 Lightsail 实例**
 ```bash
-quants-ctl infra create --name test-security \
+quants-infra infra create --name test-security \
     --blueprint ubuntu_22_04 \
     --bundle nano_2_0 \
     --availability-zone us-east-1a
@@ -263,7 +263,7 @@ cd infrastructure/tests/scripts
 
 1. **创建测试实例**
 ```bash
-quants-ctl infra create --name security-test
+quants-infra infra create --name security-test
 ```
 
 2. **应用安全配置**
@@ -284,7 +284,7 @@ ansible-playbook -i inventory 04_install_fail2ban.yml
 4. **验证和销毁**
 ```bash
 # 验证所有功能正常后
-quants-ctl infra destroy --name security-test
+quants-infra infra destroy --name security-test
 ```
 
 ---

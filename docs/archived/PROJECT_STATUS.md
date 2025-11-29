@@ -68,12 +68,12 @@
 ### ✅ Phase 4: CLI 工具（跳过 Phase 3 Terraform）
 
 #### 4.1 CLI 命令实现
-- [x] `quants-ctl deploy` - 部署服务
-- [x] `quants-ctl status` - 查看状态
-- [x] `quants-ctl logs` - 查看日志
-- [x] `quants-ctl scale` - 扩缩容
-- [x] `quants-ctl manage` - 服务管理（start/stop/restart）
-- [x] `quants-ctl destroy` - 销毁服务
+- [x] `quants-infra deploy` - 部署服务
+- [x] `quants-infra status` - 查看状态
+- [x] `quants-infra logs` - 查看日志
+- [x] `quants-infra scale` - 扩缩容
+- [x] `quants-infra manage` - 服务管理（start/stop/restart）
+- [x] `quants-infra destroy` - 销毁服务
 
 #### 4.2 CLI 特性
 - [x] 支持多种输出格式（table/json）
@@ -107,11 +107,11 @@
 - [x] Ansible inventory 自动生成模板
 
 #### 5.3 CLI infra 命令组
-- [x] `quants-ctl infra create` - 创建实例
-- [x] `quants-ctl infra destroy` - 销毁实例
-- [x] `quants-ctl infra list` - 列出实例
-- [x] `quants-ctl infra info` - 查看实例详情
-- [x] `quants-ctl infra manage` - 管理实例（start/stop/reboot）
+- [x] `quants-infra infra create` - 创建实例
+- [x] `quants-infra infra destroy` - 销毁实例
+- [x] `quants-infra infra list` - 列出实例
+- [x] `quants-infra infra info` - 查看实例详情
+- [x] `quants-infra infra manage` - 管理实例（start/stop/reboot）
 - [x] 支持多种输出格式（table/json）
 - [x] 彩色输出和进度提示
 
@@ -301,7 +301,7 @@ conda activate quants-infra
 pip install -e .
 
 # 验证安装
-quants-ctl --version
+quants-infra --version
 python -c "from providers.aws.lightsail_manager import LightsailManager; print('✓ OK')"
 ```
 
@@ -324,13 +324,13 @@ aws lightsail get-regions
 
 ```bash
 # 列出现有实例
-quants-ctl infra list --region ap-northeast-1
+quants-infra infra list --region ap-northeast-1
 
 # 查看实例详情
-quants-ctl infra info --name my-instance --region ap-northeast-1
+quants-infra infra info --name my-instance --region ap-northeast-1
 
 # 创建新实例
-quants-ctl infra create \
+quants-infra infra create \
   --name data-collector-1 \
   --blueprint ubuntu_20_04 \
   --bundle nano_3_0 \
@@ -338,11 +338,11 @@ quants-ctl infra create \
   --tags Environment=prod Service=collector
 
 # 管理实例生命周期
-quants-ctl infra manage --name data-collector-1 --action stop --region ap-northeast-1
-quants-ctl infra manage --name data-collector-1 --action start --region ap-northeast-1
+quants-infra infra manage --name data-collector-1 --action stop --region ap-northeast-1
+quants-infra infra manage --name data-collector-1 --action start --region ap-northeast-1
 
 # 销毁实例（谨慎操作）
-quants-ctl infra destroy --name data-collector-1 --region ap-northeast-1
+quants-infra infra destroy --name data-collector-1 --region ap-northeast-1
 ```
 
 ### 3. 部署数据采集服务
@@ -359,7 +359,7 @@ cat > data_collector_config.json << EOF
 EOF
 
 # 部署到 Lightsail 实例
-quants-ctl deploy \
+quants-infra deploy \
   --service data-collector \
   --host 46.51.235.94 \
   --config data_collector_config.json
@@ -368,7 +368,7 @@ quants-ctl deploy \
 ### 4. 部署监控系统
 
 ```bash
-quants-ctl deploy --service monitor --host localhost
+quants-infra deploy --service monitor --host localhost
 ```
 
 访问：
@@ -378,7 +378,7 @@ quants-ctl deploy --service monitor --host localhost
 ### 5. 部署 Freqtrade
 
 ```bash
-quants-ctl deploy \
+quants-infra deploy \
   --service freqtrade \
   --host 52.198.147.179
 ```
@@ -387,10 +387,10 @@ quants-ctl deploy \
 
 ```bash
 # 查看所有服务状态
-quants-ctl status
+quants-infra status
 
 # 查看特定服务日志
-quants-ctl logs --service data-collector --host 46.51.235.94
+quants-infra logs --service data-collector --host 46.51.235.94
 ```
 
 ### 7. 运行测试
@@ -453,7 +453,7 @@ cat docs/TESTING_GUIDE.md
 
 1. **测试 CLI 工具**
    ```bash
-   quants-ctl deploy --service data-collector --host 3.112.193.45 --dry-run
+   quants-infra deploy --service data-collector --host 3.112.193.45 --dry-run
    ```
 
 2. **部署到测试环境**

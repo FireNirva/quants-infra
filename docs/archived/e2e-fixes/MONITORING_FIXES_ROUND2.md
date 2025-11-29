@@ -170,7 +170,7 @@ def status(component):  # 无 --host 参数
     ⚠️  重要：此命令必须在 SSH 隧道建立后使用
     
     使用步骤：
-      1. 在另一个终端运行: quants-ctl monitor tunnel --host <MONITOR_IP>
+      1. 在另一个终端运行: quants-infra monitor tunnel --host <MONITOR_IP>
       2. 保持隧道运行
       3. 在此终端运行本命令
     
@@ -233,7 +233,7 @@ def logs(component, lines, host):
 **修复前**（错误）：
 ```bash
 # --host 可选，默认 localhost
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job orderbook-collector-gateio \
   --target 5.6.7.8:8002
 # ❌ 会在本机修改配置
@@ -242,7 +242,7 @@ quants-ctl monitor add-target \
 **修复后**（正确）：
 ```bash
 # --host 必需
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --host 1.2.3.4 \
   --job orderbook-collector-gateio \
   --target 5.6.7.8:8002
@@ -254,14 +254,14 @@ quants-ctl monitor add-target \
 **修复前**（混乱）：
 ```bash
 # --host 参数"仅用于识别"但不使用
-quants-ctl monitor status --host 1.2.3.4
+quants-infra monitor status --host 1.2.3.4
 # ❌ 参数无意义
 ```
 
 **修复后**（清晰）：
 ```bash
 # 无 --host 参数，固定通过 localhost（隧道）访问
-quants-ctl monitor status
+quants-infra monitor status
 # ✅ 清晰：需要先建立隧道
 ```
 
@@ -270,14 +270,14 @@ quants-ctl monitor status
 **修复前**（错误）：
 ```bash
 # --host 可选
-quants-ctl monitor logs --component prometheus --lines 100
+quants-infra monitor logs --component prometheus --lines 100
 # ❌ 默认从 localhost 获取（不合理）
 ```
 
 **修复后**（正确）：
 ```bash
 # --host 必需
-quants-ctl monitor logs --component prometheus --lines 100 --host 1.2.3.4
+quants-infra monitor logs --component prometheus --lines 100 --host 1.2.3.4
 # ✅ 通过 SSH 从远程实例获取
 ```
 
@@ -286,14 +286,14 @@ quants-ctl monitor logs --component prometheus --lines 100 --host 1.2.3.4
 **修复前**（错误）：
 ```bash
 # --host 可选
-quants-ctl monitor restart --component prometheus
+quants-infra monitor restart --component prometheus
 # ❌ 默认重启本机（不合理）
 ```
 
 **修复后**（正确）：
 ```bash
 # --host 必需
-quants-ctl monitor restart --component prometheus --host 1.2.3.4
+quants-infra monitor restart --component prometheus --host 1.2.3.4
 # ✅ 通过 SSH 重启远程实例
 ```
 
@@ -332,15 +332,15 @@ Alert rules: True
 
 ```bash
 # 测试 add-target（应要求 --host）
-quants-ctl monitor add-target --job test --target localhost:9100
+quants-infra monitor add-target --job test --target localhost:9100
 # 预期：错误提示 "Error: Missing option '--host'"
 
 # 测试 status（不应接受 --host）
-quants-ctl monitor status --host 1.2.3.4
+quants-infra monitor status --host 1.2.3.4
 # 预期：错误提示 "no such option: --host"
 
 # 测试 logs（应要求 --host）
-quants-ctl monitor logs --component prometheus
+quants-infra monitor logs --component prometheus
 # 预期：错误提示 "Error: Missing option '--host'"
 ```
 
@@ -375,11 +375,11 @@ cd infrastructure
 ls config/monitoring/prometheus/alert_rules.yml
 
 # 2. 创建监控实例
-quants-ctl infra create --name monitor-01 --bundle medium_3_0 --use-static-ip
-export MONITOR_IP=$(quants-ctl infra info --name monitor-01 --field public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+quants-infra infra create --name monitor-01 --bundle medium_3_0 --use-static-ip
+export MONITOR_IP=$(quants-infra infra info --name monitor-01 --field public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
 
 # 3. 部署监控栈
-quants-ctl monitor deploy \
+quants-infra monitor deploy \
   --host $MONITOR_IP \
   --grafana-password '<SecurePassword>' \
   --telegram-token '<TOKEN>' \
@@ -391,32 +391,32 @@ quants-ctl monitor deploy \
 ```bash
 # 访问监控界面（需要隧道）
 # 终端 A：建立隧道
-quants-ctl monitor tunnel --host $MONITOR_IP
+quants-infra monitor tunnel --host $MONITOR_IP
 
 # 终端 B：访问界面
 open http://localhost:3000
 
 # 终端 B：检查状态
-quants-ctl monitor status
+quants-infra monitor status
 
 # 终端 B：测试告警
-quants-ctl monitor test-alert
+quants-infra monitor test-alert
 
 # 添加监控目标（不需要隧道，直接 SSH）
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --host $MONITOR_IP \
   --job orderbook-collector-gateio \
   --target <COLLECTOR_IP>:8002 \
   --labels '{"exchange":"gate_io"}'
 
 # 查看日志（不需要隧道，直接 SSH）
-quants-ctl monitor logs \
+quants-infra monitor logs \
   --host $MONITOR_IP \
   --component prometheus \
   --lines 100
 
 # 重启组件（不需要隧道，直接 SSH）
-quants-ctl monitor restart \
+quants-infra monitor restart \
   --host $MONITOR_IP \
   --component prometheus
 ```

@@ -279,7 +279,7 @@ docker logs prometheus
 
 监控系统现在已经**生产就绪**，可以：
 
-✅ 使用 `quants-ctl monitor deploy` 部署到生产环境  
+✅ 使用 `quants-infra monitor deploy` 部署到生产环境  
 ✅ 添加数据采集器作为抓取目标  
 ✅ 配置 Grafana dashboards 和告警规则  
 ✅ 通过 SSH 隧道安全访问 Grafana/Prometheus  

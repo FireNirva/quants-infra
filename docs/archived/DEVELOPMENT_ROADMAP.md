@@ -191,7 +191,7 @@
 - ✅ FeasibleEngine 类
 - ✅ 评分规则配置文件
 - ✅ 单元测试
-- ✅ CLI 命令: `quants-ctl feasible evaluate`
+- ✅ CLI 命令: `quants-infra feasible evaluate`
 
 **时间**: 3-4 天
 
@@ -461,7 +461,7 @@ Alchemy Growth:      $49/月（生产环境）
 
 ```bash
 # 1. 创建监控实例
-quants-ctl infra create \
+quants-infra infra create \
   --name monitor-1 \
   --blueprint ubuntu_20_04 \
   --bundle nano_3_0 \
@@ -469,7 +469,7 @@ quants-ctl infra create \
   --tags Environment=prod Service=monitor
 
 # 2. 部署监控系统
-quants-ctl deploy --service monitor --host <monitor-ip>
+quants-infra deploy --service monitor --host <monitor-ip>
 
 # 3. 配置数据采集端点
 # 编辑 Prometheus 配置，添加：
@@ -508,14 +508,14 @@ docker build -t dex-collector .
 
 ```bash
 # 1. 创建 DEX Collector 实例
-quants-ctl infra create \
+quants-infra infra create \
   --name dex-collector-1 \
   --blueprint ubuntu_20_04 \
   --bundle nano_3_0 \
   --region ap-northeast-1
 
 # 2. 部署
-quants-ctl deploy --service data-collector --host <dex-ip>
+quants-infra deploy --service data-collector --host <dex-ip>
 
 # 3. 验证
 # - 检查 Grafana 看到 DEX 数据流

@@ -70,7 +70,7 @@ pytest tests/e2e/test_monitor_e2e.py --run-e2e -v -s
 
 ```bash
 # 运行所有单元和集成测试
-bash scripts/run_comprehensive_tests.sh
+bash scripts/test/run_comprehensive_tests.sh
 
 # 或使用 pytest
 pytest tests/unit tests/integration -v

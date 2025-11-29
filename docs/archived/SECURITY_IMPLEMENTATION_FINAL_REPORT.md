@@ -83,11 +83,11 @@ Fail2ban:
 
 2. **CLI Commands** (`cli/commands/security.py`):
    ```bash
-   quants-ctl security setup --instance-ip <IP> --profile <PROFILE>
-   quants-ctl security verify --instance-ip <IP>
-   quants-ctl security status --instance-ip <IP>
-   quants-ctl security adjust-service-firewall --instance-ip <IP> --service <SERVICE>
-   quants-ctl security adjust-vpn-firewall --instance-ip <IP>
+   quants-infra security setup --instance-ip <IP> --profile <PROFILE>
+   quants-infra security verify --instance-ip <IP>
+   quants-infra security status --instance-ip <IP>
+   quants-infra security adjust-service-firewall --instance-ip <IP> --service <SERVICE>
+   quants-infra security adjust-vpn-firewall --instance-ip <IP>
    ```
 
 3. **Deployer Integration**:
@@ -325,7 +325,7 @@ aws lightsail get-instances
 
 ```bash
 # Create Lightsail instance
-quants-ctl infra create \
+quants-infra infra create \
     --name prod-execution-01 \
     --blueprint ubuntu_22_04 \
     --bundle nano_3_0 \
@@ -333,24 +333,24 @@ quants-ctl infra create \
     --ssh-key-name mykey
 
 # Wait for instance to be running
-quants-ctl infra list --filter name=prod-execution-01
+quants-infra infra list --filter name=prod-execution-01
 
 # Get instance IP
-export INSTANCE_IP=$(quants-ctl infra info --name prod-execution-01 --output json | jq -r '.public_ip')
+export INSTANCE_IP=$(quants-infra infra info --name prod-execution-01 --output json | jq -r '.public_ip')
 ```
 
 ### 3. Apply Security Configuration
 
 ```bash
 # Apply security setup (automated)
-quants-ctl security setup \
+quants-infra security setup \
     --instance-ip $INSTANCE_IP \
     --ssh-user ubuntu \
     --ssh-key ~/.ssh/mykey.pem \
     --profile execution
 
 # Verify security configuration
-quants-ctl security verify \
+quants-infra security verify \
     --instance-ip $INSTANCE_IP \
     --ssh-user ubuntu \
     --ssh-key ~/.ssh/mykey.pem \
@@ -373,7 +373,7 @@ systemctl status sshd
 
 ```bash
 # Deploy your application (e.g., Freqtrade)
-quants-ctl deploy freqtrade \
+quants-infra deploy freqtrade \
     --host $INSTANCE_IP \
     --ssh-port 6677 \
     --config config/freqtrade/prod.yml
@@ -403,7 +403,7 @@ sudo fail2ban-client status sshd | grep "Banned IP list"
 
 ```bash
 # Security audit
-quants-ctl security verify --instance-ip $INSTANCE_IP
+quants-infra security verify --instance-ip $INSTANCE_IP
 
 # Check for security updates
 ssh -p 6677 ubuntu@$INSTANCE_IP 'sudo apt update && sudo apt list --upgradable'

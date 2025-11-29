@@ -25,8 +25,8 @@ pip list | grep quants-infrastructure
 如果需要测试，创建一个 Lightsail 实例：
 
 ```bash
-# 使用 quants-ctl 创建实例
-quants-ctl infra create \
+# 使用 quants-infra 创建实例
+quants-infra infra create \
     --name security-test \
     --blueprint ubuntu_22_04 \
     --bundle nano_2_0

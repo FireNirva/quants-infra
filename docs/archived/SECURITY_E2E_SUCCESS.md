@@ -209,17 +209,17 @@ core/ansible_manager.py           154   109    29%
 
 1. **创建生产实例**:
    ```bash
-   quants-ctl infra create --env prod --type execution
+   quants-infra infra create --env prod --type execution
    ```
 
 2. **应用安全配置**:
    ```bash
-   quants-ctl security setup --instance-ip <IP> --profile execution
+   quants-infra security setup --instance-ip <IP> --profile execution
    ```
 
 3. **验证安全配置**:
    ```bash
-   quants-ctl security verify --instance-ip <IP>
+   quants-infra security verify --instance-ip <IP>
    ```
 
 ### 监控与维护

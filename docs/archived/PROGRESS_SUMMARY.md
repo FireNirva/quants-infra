@@ -22,7 +22,7 @@
 
 **已完成** ✅:
 - Lightsail 实例管理
-- CLI 工具（quants-ctl）
+- CLI 工具（quants-infra）
 - Terraform 模块
 - Ansible playbooks
 - 测试套件（88.9% 通过率）
@@ -453,7 +453,7 @@ Deliverables:
 
 2. **准备监控实例**
    ```bash
-   quants-ctl infra create \
+   quants-infra infra create \
      --name monitor-1 \
      --blueprint ubuntu_20_04 \
      --bundle nano_3_0 \
@@ -469,7 +469,7 @@ Deliverables:
 
 4. **部署 Monitor Layer**
    ```bash
-   quants-ctl deploy --service monitor --host <monitor-ip>
+   quants-infra deploy --service monitor --host <monitor-ip>
    ```
 
 5. **配置第一个 Dashboard**

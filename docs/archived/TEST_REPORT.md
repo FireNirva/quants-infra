@@ -74,11 +74,11 @@
    - ✅ 实例分组
 
 3. **CLI 命令**
-   - ✅ `quants-ctl --version`
-   - ✅ `quants-ctl --help`
-   - ✅ `quants-ctl infra --help`
-   - ✅ `quants-ctl infra list`
-   - ✅ `quants-ctl infra info`
+   - ✅ `quants-infra --version`
+   - ✅ `quants-infra --help`
+   - ✅ `quants-infra infra --help`
+   - ✅ `quants-infra infra list`
+   - ✅ `quants-infra infra info`
 
 ### 🔄 需要实例的功能（可选测试）
 

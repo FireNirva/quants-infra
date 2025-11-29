@@ -62,25 +62,25 @@
 
 ```bash
 # 部署监控栈
-quants-ctl monitor deploy --host <IP> --grafana-password <PWD>
+quants-infra monitor deploy --host <IP> --grafana-password <PWD>
 
 # 添加监控目标
-quants-ctl monitor add-target --job <NAME> --target <IP:PORT>
+quants-infra monitor add-target --job <NAME> --target <IP:PORT>
 
 # SSH 隧道
-quants-ctl monitor tunnel --host <IP>
+quants-infra monitor tunnel --host <IP>
 
 # 查看状态
-quants-ctl monitor status
+quants-infra monitor status
 
 # 查看日志
-quants-ctl monitor logs --component <NAME>
+quants-infra monitor logs --component <NAME>
 
 # 重启组件
-quants-ctl monitor restart --component <NAME>
+quants-infra monitor restart --component <NAME>
 
 # 测试告警
-quants-ctl monitor test-alert
+quants-infra monitor test-alert
 ```
 
 **特性**：
@@ -208,7 +208,7 @@ Infrastructure 项目 → 部署监控栈（Prometheus + Grafana + Alertmanager�
    # 2. 同步到 infrastructure
    ./scripts/sync_monitoring_configs.sh --copy --force
    # 3. 重新部署
-   quants-ctl monitor deploy --host <IP>
+   quants-infra monitor deploy --host <IP>
    ```
 
 ---
@@ -293,7 +293,7 @@ medium_3_0 (80GB) 余量充足
 
 ```bash
 # 自动方式
-quants-ctl monitor tunnel --host <MONITOR_IP>
+quants-infra monitor tunnel --host <MONITOR_IP>
 
 # 手动方式
 ssh -N -L 3000:localhost:3000 -L 9090:localhost:9090 -L 9093:localhost:9093 \
@@ -315,17 +315,17 @@ ssh -N -L 3000:localhost:3000 -L 9090:localhost:9090 -L 9093:localhost:9093 \
 
 ```bash
 # Step 1: 创建监控实例
-quants-ctl infra create --name monitor-01 --bundle medium_3_0 --use-static-ip
+quants-infra infra create --name monitor-01 --bundle medium_3_0 --use-static-ip
 
 # Step 2: 配置安全
-quants-ctl security setup --instance-ip <IP> --profile monitor
+quants-infra security setup --instance-ip <IP> --profile monitor
 
 # Step 3: 部署监控栈
-quants-ctl monitor deploy --host <IP> --grafana-password <PWD> \
+quants-infra monitor deploy --host <IP> --grafana-password <PWD> \
   --telegram-token <TOKEN> --telegram-chat-id <ID>
 
 # Step 4: 建立 SSH 隧道
-quants-ctl monitor tunnel --host <IP>
+quants-infra monitor tunnel --host <IP>
 
 # Step 5: 访问 Grafana
 open http://localhost:3000
@@ -335,7 +335,7 @@ open http://localhost:3000
 
 ```bash
 # 添加每个数据采集器
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job orderbook-collector-gateio \
   --target <COLLECTOR_IP>:8002 \
   --labels '{"exchange":"gate_io"}'
@@ -345,7 +345,7 @@ quants-ctl monitor add-target \
 
 ```bash
 # 测试 Telegram 告警
-quants-ctl monitor test-alert
+quants-infra monitor test-alert
 
 # 验证收到测试消息
 ```

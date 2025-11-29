@@ -216,7 +216,7 @@ extra_vars = {
 ### ✅ 7. CLI 命令未考虑 SSH 隧道（中等）
 
 **问题描述**：
-- `quants-ctl monitor status`/`logs`/`test-alert` 等命令依赖端口直连
+- `quants-infra monitor status`/`logs`/`test-alert` 等命令依赖端口直连
 - 未说明需要先建立隧道
 - 文档未明确说明隧道是必需的
 
@@ -231,9 +231,9 @@ def status(...):
     ⚠️  注意：此命令需要先建立 SSH 隧道
     
     运行前请确保：
-      quants-ctl monitor tunnel --host <MONITOR_IP>
+      quants-infra monitor tunnel --host <MONITOR_IP>
     """
-    click.echo("⚠️  确保 SSH 隧道已建立: quants-ctl monitor tunnel --host <IP>\n")
+    click.echo("⚠️  确保 SSH 隧道已建立: quants-infra monitor tunnel --host <IP>\n")
     # ...
     config = {'monitor_host': 'localhost'}  # 通过隧道访问
 ```
@@ -304,7 +304,7 @@ if not self._setup_docker(host):
 - 符合行业最佳实践
 
 **用户影响**：
-- 必须在新终端运行隧道：`quants-ctl monitor tunnel --host <IP>`
+- 必须在新终端运行隧道：`quants-infra monitor tunnel --host <IP>`
 - 隧道断开后无法访问监控界面
 - 自动化脚本需要先建立隧道
 
@@ -377,17 +377,17 @@ if not self._setup_docker(host):
 
 ```bash
 # 步骤 1：创建监控实例
-quants-ctl infra create \
+quants-infra infra create \
   --name monitor-01 \
   --bundle medium_3_0 \
   --use-static-ip
 
 # 步骤 2：获取 IP 并保存
-export MONITOR_IP=$(quants-ctl infra info --name monitor-01 --field public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+export MONITOR_IP=$(quants-infra infra info --name monitor-01 --field public_ip | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
 echo "监控实例 IP: $MONITOR_IP"
 
 # 步骤 3：配置安全（包括防火墙）
-quants-ctl security setup \
+quants-infra security setup \
   --instance-ip $MONITOR_IP \
   --profile monitor
 
@@ -396,20 +396,20 @@ cd infrastructure
 ./scripts/sync_monitoring_configs.sh --copy
 
 # 步骤 5：部署监控栈
-quants-ctl monitor deploy \
+quants-infra monitor deploy \
   --host $MONITOR_IP \
   --grafana-password '<YourSecurePassword>' \
   --telegram-token '<YOUR_TOKEN>' \
   --telegram-chat-id '<YOUR_CHAT_ID>'
 
 # 步骤 6：建立 SSH 隧道（新终端）
-quants-ctl monitor tunnel --host $MONITOR_IP
+quants-infra monitor tunnel --host $MONITOR_IP
 
 # 步骤 7：访问监控界面
 open http://localhost:3000
 
 # 步骤 8：添加监控目标（针对每个数据采集器）
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job orderbook-collector-gateio \
   --target <COLLECTOR_IP>:8002 \
   --labels '{"exchange":"gate_io"}'
@@ -434,19 +434,19 @@ ls infrastructure/config/monitoring/grafana/provisioning/
 
 ```bash
 # 1. 部署监控栈
-quants-ctl monitor deploy --host <IP> --grafana-password test123
+quants-infra monitor deploy --host <IP> --grafana-password test123
 
 # 2. 建立隧道
-quants-ctl monitor tunnel --host <IP>
+quants-infra monitor tunnel --host <IP>
 
 # 3. 健康检查
-quants-ctl monitor status
+quants-infra monitor status
 
 # 4. 测试告警
-quants-ctl monitor test-alert
+quants-infra monitor test-alert
 
 # 5. 添加目标
-quants-ctl monitor add-target --job test --target localhost:9100
+quants-infra monitor add-target --job test --target localhost:9100
 
 # 6. 验证目标出现在 Prometheus
 curl http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].labels.job'

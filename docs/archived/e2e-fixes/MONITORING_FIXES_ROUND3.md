@@ -61,7 +61,7 @@ def _deploy_prometheus(self, host: str) -> bool:
 
 2. **文档更新** - 在部署指南中明确说明：
    - 初始部署只包含 Prometheus、Grafana、Alertmanager 自身监控
-   - 所有应用目标需要通过 `quants-ctl monitor add-target` 添加
+   - 所有应用目标需要通过 `quants-infra monitor add-target` 添加
    - 这是设计决策，不是限制
 
 ---
@@ -249,15 +249,15 @@ click.echo("✅ 配置文件检查通过\n")
 
 ```bash
 # 部署监控栈（不传采集器目标）
-quants-ctl monitor deploy --host <IP> --grafana-password <PWD>
+quants-infra monitor deploy --host <IP> --grafana-password <PWD>
 
 # 检查初始配置（应该只有 prometheus 和 node-exporter）
-quants-ctl monitor tunnel --host <IP>
+quants-infra monitor tunnel --host <IP>
 # 在另一终端：
 curl http://localhost:9090/api/v1/targets
 
 # 动态添加数据采集器
-quants-ctl monitor add-target \
+quants-infra monitor add-target \
   --job data-collector-gate \
   --target <COLLECTOR_IP>:8000 \
   --host <MONITOR_IP>
@@ -270,13 +270,13 @@ curl http://localhost:9090/api/v1/targets
 
 ```bash
 # 添加第一个 job
-quants-ctl monitor add-target --job job1 --target host1:8000 --host <IP>
+quants-infra monitor add-target --job job1 --target host1:8000 --host <IP>
 
 # 添加第二个 job
-quants-ctl monitor add-target --job job2 --target host2:8001 --host <IP>
+quants-infra monitor add-target --job job2 --target host2:8001 --host <IP>
 
 # 更新第一个 job（不应影响 job2）
-quants-ctl monitor add-target --job job1 --target host1:8000,host3:8000 --host <IP>
+quants-infra monitor add-target --job job1 --target host1:8000,host3:8000 --host <IP>
 
 # 验证配置
 ssh ubuntu@<IP> -p 6677 cat /etc/prometheus/prometheus.yml
@@ -287,16 +287,16 @@ ssh ubuntu@<IP> -p 6677 cat /etc/prometheus/prometheus.yml
 
 ```bash
 # 健康检查（远程 IP，通过 SSH）
-quants-ctl monitor health-check --host <REMOTE_IP>
+quants-infra monitor health-check --host <REMOTE_IP>
 # 应该成功（通过 SSH 执行 curl）
 
 # 健康检查（localhost，通过隧道）
-quants-ctl monitor tunnel --host <REMOTE_IP>  # 在另一终端
-quants-ctl monitor health-check --host localhost
+quants-infra monitor tunnel --host <REMOTE_IP>  # 在另一终端
+quants-infra monitor health-check --host localhost
 # 应该成功（通过隧道访问）
 
 # 健康检查（localhost，无隧道）
-quants-ctl monitor health-check --host localhost
+quants-infra monitor health-check --host localhost
 # 应该失败并提示建立隧道
 ```
 
@@ -307,7 +307,7 @@ quants-ctl monitor health-check --host localhost
 rm -rf infrastructure/config/monitoring
 
 # 尝试部署（应该在预检查阶段失败）
-quants-ctl monitor deploy --host <IP> --grafana-password <PWD>
+quants-infra monitor deploy --host <IP> --grafana-password <PWD>
 # 输出：
 # 🔍 预检查配置文件...
 #    ❌ 缺失: config/monitoring/prometheus/prometheus.yml.j2
@@ -321,7 +321,7 @@ quants-ctl monitor deploy --host <IP> --grafana-password <PWD>
 ./scripts/sync_monitoring_configs.sh --copy
 
 # 再次部署（应该通过预检查）
-quants-ctl monitor deploy --host <IP> --grafana-password <PWD>
+quants-infra monitor deploy --host <IP> --grafana-password <PWD>
 # 输出：
 # 🔍 预检查配置文件...
 #    ✓ 找到: config/monitoring/prometheus/prometheus.yml.j2
@@ -364,7 +364,7 @@ quants-ctl monitor deploy --host <IP> --grafana-password <PWD>
    ↓
 9. 验证健康状态（通过 SSH）
    ↓
-10. 后续手动添加采集器目标（quants-ctl monitor add-target）
+10. 后续手动添加采集器目标（quants-infra monitor add-target）
 ```
 
 ### 配置管理策略（最终版本）
@@ -413,16 +413,16 @@ infrastructure/
 
 ### 中期（增强功能）
 1. **目标管理增强**
-   - `quants-ctl monitor list-targets` - 列出所有已注册目标
-   - `quants-ctl monitor remove-target` - 删除目标
-   - `quants-ctl monitor update-target` - 更新目标标签
+   - `quants-infra monitor list-targets` - 列出所有已注册目标
+   - `quants-infra monitor remove-target` - 删除目标
+   - `quants-infra monitor update-target` - 更新目标标签
 
 2. **配置备份与恢复**
-   - `quants-ctl monitor backup-config` - 备份 Prometheus 配置
-   - `quants-ctl monitor restore-config` - 恢复配置
+   - `quants-infra monitor backup-config` - 备份 Prometheus 配置
+   - `quants-infra monitor restore-config` - 恢复配置
 
 3. **批量操作**
-   - `quants-ctl monitor add-targets-from-file` - 从 YAML 批量添加目标
+   - `quants-infra monitor add-targets-from-file` - 从 YAML 批量添加目标
 
 ### 长期（可观测性平台）
 1. 集成分布式追踪（Jaeger/Tempo）

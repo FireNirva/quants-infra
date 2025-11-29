@@ -19,7 +19,7 @@ bash setup_conda.sh
 - 检查 conda 是否安装
 - 创建名为 `quants-infra` 的环境（Python 3.11）
 - 安装所有依赖
-- 安装 quants-ctl CLI 工具
+- 安装 quants-infra CLI 工具
 
 ### 方法 2: 手动设置
 
@@ -33,8 +33,8 @@ conda env create -f environment.yml
 conda activate quants-infra
 
 # 验证安装
-quants-ctl --version
-quants-ctl --help
+quants-infra --version
+quants-infra --help
 ```
 
 ---
@@ -49,11 +49,11 @@ python --version
 # 应该显示: Python 3.11.x
 
 # 检查 CLI 工具
-quants-ctl --version
-# 应该显示: quants-ctl, version 0.1.0
+quants-infra --version
+# 应该显示: quants-infra, version 0.1.0
 
 # 查看所有可用命令
-quants-ctl --help
+quants-infra --help
 
 # 运行测试
 pytest tests/ -v
@@ -110,13 +110,13 @@ conda env create -f environment.yml
 conda activate quants-infra
 
 # Dry-run 测试
-quants-ctl deploy \
+quants-infra deploy \
   --service data-collector \
   --host 3.112.193.45 \
   --dry-run
 
 # 实际部署
-quants-ctl deploy \
+quants-infra deploy \
   --service data-collector \
   --host 3.112.193.45
 ```
@@ -125,14 +125,14 @@ quants-ctl deploy \
 
 ```bash
 conda activate quants-infra
-quants-ctl status
+quants-infra status
 ```
 
 ### 3. 查看日志
 
 ```bash
 conda activate quants-infra
-quants-ctl logs --service data-collector-1 --lines 100
+quants-infra logs --service data-collector-1 --lines 100
 ```
 
 ---
@@ -218,7 +218,7 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-### 问题 4: quants-ctl 命令找不到
+### 问题 4: quants-infra 命令找不到
 
 **解决方法:**
 
@@ -230,8 +230,8 @@ conda activate quants-infra
 pip install -e .
 
 # 验证
-which quants-ctl
-# 应该显示: /path/to/conda/envs/quants-infra/bin/quants-ctl
+which quants-infra
+# 应该显示: /path/to/conda/envs/quants-infra/bin/quants-infra
 ```
 
 ---

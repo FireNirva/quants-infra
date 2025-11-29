@@ -38,11 +38,11 @@
 - ✅ 实例分组（collectors/execution_engines/monitors）
 
 ### 3. CLI 命令 ✅
-- ✅ `quants-ctl --version` → 正常输出
-- ✅ `quants-ctl --help` → 显示帮助
-- ✅ `quants-ctl infra --help` → 显示 infra 子命令
-- ✅ `quants-ctl infra list` → 列出实例
-- ✅ `quants-ctl infra info` → 查看实例详情
+- ✅ `quants-infra --version` → 正常输出
+- ✅ `quants-infra --help` → 显示帮助
+- ✅ `quants-infra infra --help` → 显示 infra 子命令
+- ✅ `quants-infra infra list` → 列出实例
+- ✅ `quants-infra infra info` → 查看实例详情
 
 ---
 
@@ -159,25 +159,25 @@ bash run_tests.sh unit
 
 ```bash
 # 列出所有实例
-quants-ctl infra list --region ap-northeast-1
+quants-infra infra list --region ap-northeast-1
 
 # 查看实例详情
-quants-ctl infra info --name instance-name --region ap-northeast-1
+quants-infra infra info --name instance-name --region ap-northeast-1
 
 # 创建新实例
-quants-ctl infra create \
+quants-infra infra create \
   --name test-instance \
   --blueprint ubuntu_20_04 \
   --bundle nano_3_0 \
   --region ap-northeast-1
 
 # 管理实例生命周期
-quants-ctl infra manage --name instance-name --action stop --region ap-northeast-1
-quants-ctl infra manage --name instance-name --action start --region ap-northeast-1
-quants-ctl infra manage --name instance-name --action reboot --region ap-northeast-1
+quants-infra infra manage --name instance-name --action stop --region ap-northeast-1
+quants-infra infra manage --name instance-name --action start --region ap-northeast-1
+quants-infra infra manage --name instance-name --action reboot --region ap-northeast-1
 
 # 销毁实例
-quants-ctl infra destroy --name instance-name --region ap-northeast-1
+quants-infra infra destroy --name instance-name --region ap-northeast-1
 ```
 
 ---
@@ -241,8 +241,8 @@ quants-ctl infra destroy --name instance-name --region ap-northeast-1
 
 3. **验证 CLI 命令**:
    ```bash
-   quants-ctl --version
-   quants-ctl infra --help
+   quants-infra --version
+   quants-infra infra --help
    ```
 
 ### 部署到生产
@@ -335,7 +335,7 @@ quants-ctl infra destroy --name instance-name --region ap-northeast-1
 
 **🎊 恭喜！所有核心功能测试成功完成！**
 
-**准备就绪，可以开始使用 quants-ctl 管理你的基础设施了！** 🚀
+**准备就绪，可以开始使用 quants-infra 管理你的基础设施了！** 🚀
 
 ---
 

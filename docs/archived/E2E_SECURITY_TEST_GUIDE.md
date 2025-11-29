@@ -79,7 +79,7 @@
 - 验证 VPN 限制端口
 
 ### 测试 12: CLI 命令测试 (高级)
-- 测试 quants-ctl security 命令
+- 测试 quants-infra security 命令
 
 ### 测试 13: 备份文件验证 (高级)
 - 检查备份目录
