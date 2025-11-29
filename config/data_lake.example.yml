@@ -1,0 +1,135 @@
+# Data Lake 配置示例
+# 
+# 此配置文件定义了如何从远程数据采集节点同步数据到本地存储
+# 支持多个 profiles，每个 profile 对应一个独立的数据源
+
+data_lake:
+  # ============================================================================
+  # 全局设置
+  # ============================================================================
+  
+  # 本地 Data Lake 根目录
+  # 所有 profile 的数据都会存储在此目录下的对应子目录中
+  root_dir: /data/lake
+  
+  # Checkpoint 文件目录（可选）
+  # 用于记录每次同步的状态，支持断点续传
+  # 如果不指定，默认为 {root_dir}/.checkpoints
+  checkpoint_dir: /data/lake/.checkpoints
+  
+  # ============================================================================
+  # Profiles - 数据源配置
+  # ============================================================================
+  profiles:
+    
+    # Profile 1: CEX Orderbook Ticks（中心化交易所订单簿数据）
+    cex_ticks:
+      # 是否启用此 profile
+      enabled: true
+      
+      # 数据源配置
+      source:
+        # 数据源类型（目前仅支持 ssh）
+        type: ssh
+        
+        # 远程主机地址（可以是 Tailscale VPN IP 或公网 IP）
+        host: 10.0.0.11
+        
+        # SSH 端口（默认 6677，与 quants-infra 安全配置一致）
+        port: 6677
+        
+        # SSH 用户名
+        user: ubuntu
+        
+        # SSH 私钥路径（支持 ~ 展开）
+        ssh_key: ~/.ssh/lightsail_key.pem
+        
+        # 远程数据根目录
+        # 这是数据采集器存储数据的目录
+        remote_root: /var/data/cex_tickers
+      
+      # 本地子目录（相对于 root_dir）
+      # 数据将被同步到 {root_dir}/{local_subdir}/
+      local_subdir: cex_ticks
+      
+      # 数据保留天数
+      # 超过此天数的数据将被自动清理
+      retention_days: 30
+      
+      # rsync 命令参数
+      # -a: archive mode（保留权限、时间戳等）
+      # -z: 压缩传输
+      # --partial: 支持断点续传
+      # --inplace: 就地更新文件（避免临时文件）
+      # --delete: 删除远端已删除的文件（可选）
+      rsync_args: "-az --partial --inplace"
+      
+      # Checkpoint 文件路径（可选）
+      # 如果不指定，会自动生成为 {checkpoint_dir}/{profile_name}.json
+      # checkpoint_file: /data/lake/.checkpoints/cex_ticks.json
+    
+    # Profile 2: DEX OHLCV（去中心化交易所 K 线数据）
+    dex_candles:
+      # 此 profile 暂时禁用
+      enabled: false
+      
+      source:
+        type: ssh
+        host: 10.0.0.12
+        port: 6677
+        user: ubuntu
+        ssh_key: ~/.ssh/lightsail_key.pem
+        remote_root: /var/data/dex_candles
+      
+      local_subdir: dex_candles
+      
+      # DEX 数据保留时间更长
+      retention_days: 60
+      
+      rsync_args: "-az --partial --inplace"
+    
+    # Profile 3: 交易执行日志
+    trade_logs:
+      enabled: false
+      
+      source:
+        type: ssh
+        host: 10.0.0.13
+        port: 6677
+        user: ubuntu
+        ssh_key: ~/.ssh/lightsail_key.pem
+        remote_root: /var/data/trade_logs
+      
+      local_subdir: trade_logs
+      
+      # 日志保留 7 天即可
+      retention_days: 7
+      
+      # 日志文件不需要 --delete 参数，避免误删
+      rsync_args: "-az --partial --inplace"
+
+# ============================================================================
+# 使用说明
+# ============================================================================
+#
+# 1. 复制此文件为 data_lake.yml：
+#    cp config/data_lake.example.yml config/data_lake.yml
+#
+# 2. 根据你的环境修改配置：
+#    - 更新 host 为你的远程节点 IP
+#    - 确保 ssh_key 路径正确
+#    - 调整 retention_days 根据磁盘空间
+#
+# 3. 验证配置：
+#    quants-infra data-lake validate
+#
+# 4. 首次同步：
+#    quants-infra data-lake sync cex_ticks
+#
+# 5. 查看统计：
+#    quants-infra data-lake stats cex_ticks
+#
+# 6. 设置定时同步（cron）：
+#    0 * * * * cd /path/to/quants-infra && quants-infra data-lake sync --all
+#
+# ============================================================================
