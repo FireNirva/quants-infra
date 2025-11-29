@@ -284,7 +284,7 @@ def collector_instance(test_config, lightsail_manager):
     if test_config['cleanup_on_success']:
         print(f"\n清理 Collector 实例: {instance_name}")
         try:
-            lightsail_manager.delete_instance(instance_name)
+            lightsail_manager.destroy_instance(instance_name, force=True)
             print_success(f"实例 {instance_name} 已删除")
         except Exception as e:
             print_error(f"清理失败: {e}")
@@ -367,7 +367,7 @@ def data_lake_instance(test_config, lightsail_manager):
     if test_config['cleanup_on_success']:
         print(f"\n清理 Data Lake 实例: {instance_name}")
         try:
-            lightsail_manager.delete_instance(instance_name)
+            lightsail_manager.destroy_instance(instance_name, force=True)
             print_success(f"实例 {instance_name} 已删除")
         except Exception as e:
             print_error(f"清理失败: {e}")
@@ -396,11 +396,23 @@ class TestDataLakeRealE2E:
         
         print_step(1, 3, "部署 Data Collector")
         
+        # 先创建数据目录
+        print("创建数据目录...")
+        create_dir_cmd = f"sudo mkdir -p {test_config['collector_data_root']} && sudo chown ubuntu:ubuntu {test_config['collector_data_root']}"
+        dir_result = run_ssh_command(
+            collector_ip,
+            create_dir_cmd,
+            test_config['ssh_key_path']
+        )
+        assert dir_result['success'], f"创建数据目录失败: {dir_result.get('stderr', '')}"
+        print_success("数据目录创建成功")
+        
         deployer_config = {
             'ansible_dir': test_config['ansible_dir'],
             'ssh_key_path': test_config['ssh_key_path'],
             'ssh_port': 22,
             'ssh_user': 'ubuntu',
+            'vpn_ip': collector_ip,  # 使用公网 IP 作为 VPN IP（测试场景）
             'github_repo': test_config['github_repo'],
             'github_branch': test_config['github_branch'],
             'exchange': test_config['exchange'],
@@ -537,14 +549,16 @@ class TestDataLakeRealE2E:
         
         print_step(1, 3, "执行 rsync 同步")
         
+        # 构建 rsync 命令（使用 Data Lake 实例上的 SSH 密钥）
         rsync_cmd = f"""
         rsync -avz --partial --inplace \
-            -e "ssh -i ~/.ssh/collector_key.pem -o StrictHostKeyChecking=no" \
+            -e "ssh -i ~/.ssh/collector_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
             ubuntu@{collector_ip}:{test_config['collector_data_root']}/ \
             {test_config['data_lake_root']}/data/
         """
         
         print("执行同步命令...")
+        print(f"从 {collector_ip} 同步到本地 {test_config['data_lake_root']}/data/")
         result = run_ssh_command(
             data_lake_ip,
             rsync_cmd,
