@@ -17,11 +17,10 @@ Environment="PATH=/opt/miniconda3/envs/quants-lab/bin:/opt/miniconda3/bin:/usr/l
 Environment="PYTHONUNBUFFERED=1"
 Environment="CONDA_DEFAULT_ENV=quants-lab"
 
-# 启动命令（API 端口与 Metrics 端口分离，避免端口冲突）
-ExecStart=/opt/miniconda3/bin/conda run --no-capture-output -n quants-lab python /opt/quants-lab/cli.py serve \
-    --config config/orderbook_tick_{{ exchange }}.yml \
-    --host {{ metrics_bind_host | default('0.0.0.0') }} \
-    --port {{ api_port | default((metrics_port | int) + 500) }}
+# 启动命令（使用 run-tasks 直接运行数据采集任务）
+# run-tasks 会持续运行任务并暴露 Prometheus metrics 在配置的端口
+ExecStart=/opt/miniconda3/bin/conda run --no-capture-output -n quants-lab python /opt/quants-lab/cli.py run-tasks \
+    --config config/orderbook_tick_{{ exchange }}.yml
 
 # 重启策略
 Restart=always
