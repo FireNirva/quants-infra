@@ -28,6 +28,15 @@ tasks:
       buffer_size: {{ buffer_size | default(100) }}
       flush_interval: {{ flush_interval | default(10.0) }}
       gap_warning_threshold: {{ gap_warning_threshold | default(50) }}
+      
+      storage:
+        type: parquet
+        base_path: "{{ output_dir | default('/data/orderbook_ticks') }}"
+        partition_by:
+          - exchange
+          - symbol
+          - date
+        compression: snappy
     
     tags:
       - data_collection

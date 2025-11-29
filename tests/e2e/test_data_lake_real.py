@@ -160,7 +160,7 @@ def test_config(run_e2e):
     return {
         # AWS 配置
         'region': os.getenv('TEST_AWS_REGION', 'ap-northeast-1'),
-        'bundle_id': 'nano_3_0',  # 最小规格，节省成本
+        'bundle_id': 'small_3_0',  # 使用 small 规格 (2GB RAM)，nano 内存不足
         'ssh_key_name': ssh_key_name,
         'ssh_key_path': ssh_key_path,
         
@@ -172,12 +172,15 @@ def test_config(run_e2e):
         'exchange': 'gateio',
         'pairs': ['VIRTUAL-USDT'],  # 只测试一个交易对
         'collect_duration_seconds': 90,  # 收集 90 秒数据
-        'github_repo': 'https://github.com/FireNirva/hummingbot-quants-lab.git',
-        'github_branch': 'main',
+        'collector_github_repo': 'https://github.com/FireNirva/hummingbot-quants-lab.git',
+        'collector_github_branch': 'main',
         
         # Data Lake 配置
         'data_lake_root': '/home/ubuntu/data_lake',
-        'collector_data_root': '/var/data/cex_tickers',
+        'collector_data_root': '/data/orderbook_ticks',  # quants-lab 默认输出目录
+        'data_lake_github_repo': 'https://github.com/FireNirva/quants-infra.git',
+        'data_lake_github_branch': 'main',
+        'quants_infra_dir': 'quants-infra',  # Data Lake GitHub 仓库克隆后的目录名
         
         # Ansible 配置
         'ansible_dir': os.path.join(project_root, 'ansible'),
@@ -396,25 +399,14 @@ class TestDataLakeRealE2E:
         
         print_step(1, 3, "部署 Data Collector")
         
-        # 先创建数据目录
-        print("创建数据目录...")
-        create_dir_cmd = f"sudo mkdir -p {test_config['collector_data_root']} && sudo chown ubuntu:ubuntu {test_config['collector_data_root']}"
-        dir_result = run_ssh_command(
-            collector_ip,
-            create_dir_cmd,
-            test_config['ssh_key_path']
-        )
-        assert dir_result['success'], f"创建数据目录失败: {dir_result.get('stderr', '')}"
-        print_success("数据目录创建成功")
-        
         deployer_config = {
             'ansible_dir': test_config['ansible_dir'],
             'ssh_key_path': test_config['ssh_key_path'],
             'ssh_port': 22,
             'ssh_user': 'ubuntu',
             'vpn_ip': collector_ip,  # 使用公网 IP 作为 VPN IP（测试场景）
-            'github_repo': test_config['github_repo'],
-            'github_branch': test_config['github_branch'],
+            'github_repo': test_config['collector_github_repo'],
+            'github_branch': test_config['collector_github_branch'],
             'exchange': test_config['exchange'],
             'pairs': ','.join(test_config['pairs']),
             'depth_limit': 20,
@@ -426,7 +418,7 @@ class TestDataLakeRealE2E:
         
         # 部署
         print("开始部署...")
-        result = deployer.deploy([collector_ip])
+        result = deployer.deploy([collector_ip], vpn_ip=collector_ip)
         assert result is True, "Data Collector 部署失败"
         print_success("Data Collector 部署成功")
         
@@ -435,13 +427,106 @@ class TestDataLakeRealE2E:
         assert result is True, "Data Collector 启动失败"
         print_success("Data Collector 已启动")
         
+        # 检查进程是否在运行
+        print("\n检查 Data Collector 进程...")
+        check_process_cmd = "ps aux | grep '[c]li.py serve' || echo 'No process found'"
+        process_result = run_ssh_command(
+            collector_ip,
+            check_process_cmd,
+            test_config['ssh_key_path']
+        )
+        if process_result['success']:
+            print(f"进程状态:\n{process_result['stdout']}")
+        
+        # 检查网络连接
+        print("\n检查网络连接...")
+        network_cmd = "netstat -tn | grep -E 'ESTABLISHED.*:443|ESTABLISHED.*:9443' || echo 'No WebSocket connections found'"
+        network_result = run_ssh_command(
+            collector_ip,
+            network_cmd,
+            test_config['ssh_key_path']
+        )
+        if network_result['success']:
+            print(f"WebSocket 连接:\n{network_result['stdout']}")
+        
+        # 查看配置文件
+        print("\n查看生成的配置文件...")
+        config_cmd = "cat /opt/quants-lab/config/orderbook_tick_gateio.yml"
+        config_result = run_ssh_command(
+            collector_ip,
+            config_cmd,
+            test_config['ssh_key_path']
+        )
+        if config_result['success']:
+            print(f"配置文件内容:\n{config_result['stdout']}")
+        
+        # 查看 metrics 输出
+        print("\n查看 Metrics 输出...")
+        metrics_cmd = "curl -s http://127.0.0.1:8000/metrics | grep -E 'orderbook_collector_(ticks_written|files_written|connection_status|messages_received)'"
+        metrics_result = run_ssh_command(
+            collector_ip,
+            metrics_cmd,
+            test_config['ssh_key_path']
+        )
+        if metrics_result['success']:
+            print(f"Metrics 关键指标:\n{metrics_result['stdout']}")
+        
+        # 查看应用日志（stdout/stderr）
+        print("\n查看应用日志文件...")
+        app_log_cmd = """
+        if [ -f /opt/quants-lab/logs/app.log ]; then
+            echo '=== App Log (last 50 lines) ===' && tail -50 /opt/quants-lab/logs/app.log
+        elif [ -f /var/log/quants-lab/gateio-collector.log ]; then
+            echo '=== Collector Log (last 50 lines) ===' && tail -50 /var/log/quants-lab/gateio-collector.log
+        else
+            echo 'No application log files found'
+            echo 'Checking journalctl for detailed logs...'
+            journalctl -u quants-lab-gateio-collector -n 100 --no-pager
+        fi
+        """
+        app_log_result = run_ssh_command(
+            collector_ip,
+            app_log_cmd,
+            test_config['ssh_key_path'],
+            timeout=20
+        )
+        if app_log_result['success']:
+            print(f"应用日志:\n{app_log_result['stdout']}")
+        
+        # 尝试通过 API 触发任务
+        print("\n尝试触发 orderbook_tick_gateio 任务...")
+        trigger_cmd = "curl -X POST http://127.0.0.1:8500/api/v1/tasks/orderbook_tick_gateio/start || echo 'API trigger failed or not supported'"
+        trigger_result = run_ssh_command(
+            collector_ip,
+            trigger_cmd,
+            test_config['ssh_key_path']
+        )
+        if trigger_result['success']:
+            print(f"触发结果:\n{trigger_result['stdout']}")
+        
         print_step(3, 3, f"等待收集数据 ({test_config['collect_duration_seconds']} 秒)")
-        time.sleep(test_config['collect_duration_seconds'])
+        
+        # 等待 30 秒后检查一次连接状态
+        time.sleep(30)
+        print("\n检查数据采集状态（30秒后）...")
+        status_metrics_cmd = "curl -s http://127.0.0.1:8000/metrics | grep -E 'orderbook_collector_(connection_status|messages_received_total|ticks_written_total)' | grep -v '^#'"
+        status_result = run_ssh_command(collector_ip, status_metrics_cmd, test_config['ssh_key_path'])
+        if status_result['success']:
+            status_output = status_result['stdout'].strip()
+            if status_output:
+                print(f"当前状态:\n{status_output}")
+            else:
+                print("⚠️  Metrics 中没有实际数值 - collector 可能未启动或未连接")
+        
+        # 继续等待剩余时间
+        remaining_time = test_config['collect_duration_seconds'] - 30
+        print(f"继续等待 {remaining_time} 秒...")
+        time.sleep(remaining_time)
         print_success("数据收集完成")
         
-        # 验证数据文件存在
+        # 验证数据文件存在（查找 parquet 或 csv 文件）
         print("\n验证数据文件...")
-        check_cmd = f"ls -lh {test_config['collector_data_root']}"
+        check_cmd = f"find {test_config['collector_data_root']} -type f \\( -name '*.parquet' -o -name '*.csv' \\) 2>/dev/null | head -10"
         result = run_ssh_command(
             collector_ip,
             check_cmd,
@@ -449,10 +534,41 @@ class TestDataLakeRealE2E:
         )
         
         if result['success']:
-            print("收集的数据文件：")
-            print(result['stdout'])
-            assert len(result['stdout'].strip()) > 0, "没有收集到数据文件"
-            print_success("数据文件验证通过")
+            files = result['stdout'].strip()
+            if files:
+                print(f"找到数据文件 (parquet/csv):\n{files}")
+                
+                # 统计文件数量和大小
+                count_cmd = f"find {test_config['collector_data_root']} -type f | wc -l && du -sh {test_config['collector_data_root']}"
+                count_result = run_ssh_command(
+                    collector_ip,
+                    count_cmd,
+                    test_config['ssh_key_path']
+                )
+                if count_result['success']:
+                    print(f"统计信息:\n{count_result['stdout']}")
+                
+                print_success("数据文件验证通过")
+            else:
+                # 数据文件不存在，打印更多诊断信息
+                print_error("没有找到数据文件（parquet/csv）")
+                
+                # 检查目录内容
+                ls_cmd = f"ls -lhR {test_config['collector_data_root']}"
+                ls_result = run_ssh_command(collector_ip, ls_cmd, test_config['ssh_key_path'])
+                print(f"目录内容:\n{ls_result['stdout']}")
+                
+                # 再次检查进程和日志
+                ps_cmd = "ps aux | grep '[c]li.py serve'"
+                ps_result = run_ssh_command(collector_ip, ps_cmd, test_config['ssh_key_path'])
+                print(f"进程状态:\n{ps_result['stdout']}")
+                
+                # 查看服务状态
+                status_cmd = "systemctl status quants-lab-gateio-collector --no-pager"
+                status_result = run_ssh_command(collector_ip, status_cmd, test_config['ssh_key_path'])
+                print(f"服务状态:\n{status_result['stdout']}")
+                
+                pytest.fail("Data Collector 没有收集到数据文件")
         else:
             pytest.fail(f"无法验证数据文件: {result['stderr']}")
         
@@ -497,10 +613,10 @@ class TestDataLakeRealE2E:
         
         clone_cmd = f"""
         cd ~ && \
-        rm -rf quants-infra && \
-        git clone {test_config['github_repo']} && \
-        cd quants-infra && \
-        git checkout {test_config['github_branch']} && \
+        rm -rf {test_config['quants_infra_dir']} && \
+        git clone {test_config['data_lake_github_repo']} && \
+        cd {test_config['quants_infra_dir']} && \
+        git checkout {test_config['data_lake_github_branch']} && \
         echo "Repository cloned successfully"
         """
         
@@ -512,16 +628,18 @@ class TestDataLakeRealE2E:
         )
         
         if result['success']:
-            print_success(f"GitHub 仓库克隆成功 ({test_config['github_branch']} 分支)")
+            print_success(f"GitHub 仓库克隆成功 ({test_config['data_lake_github_branch']} 分支)")
         else:
             pytest.fail(f"GitHub 仓库克隆失败: {result['stderr']}")
         
         print_step(3, 4, "安装 quants-infra")
         
-        setup_cmd = """
-        cd ~/quants-infra && \
-        pip3 install -e . && \
-        quants-infra --version && \
+        setup_cmd = f"""
+        cd ~/{test_config['quants_infra_dir']} && \
+        pip3 install --user -r requirements.txt && \
+        pip3 install --user -e . && \
+        export PATH=$PATH:/home/ubuntu/.local/bin && \
+        /home/ubuntu/.local/bin/quants-infra --version && \
         echo "quants-infra installed successfully"
         """
         
@@ -560,10 +678,10 @@ class TestDataLakeRealE2E:
 """
         
         config_cmd = f"""
-        mkdir -p ~/quants-infra/config && \
+        mkdir -p ~/{test_config['quants_infra_dir']}/config && \
         mkdir -p {test_config['data_lake_root']}/checkpoints && \
         mkdir -p {test_config['data_lake_root']}/data && \
-        cat > ~/quants-infra/config/data_lake.yml << 'EOF'
+        cat > ~/{test_config['quants_infra_dir']}/config/data_lake.yml << 'EOF'
 {config_content}EOF
         echo "Data Lake configuration created"
         """
@@ -601,7 +719,7 @@ class TestDataLakeRealE2E:
         
         # 验证配置
         print("\n验证 Data Lake 配置...")
-        validate_cmd = "cd ~/quants-infra && quants-infra data-lake validate --config config/data_lake.yml"
+        validate_cmd = f"cd ~/{test_config['quants_infra_dir']} && /home/ubuntu/.local/bin/quants-infra data-lake validate --config config/data_lake.yml"
         result = run_ssh_command(
             data_lake_ip,
             validate_cmd,
@@ -634,8 +752,8 @@ class TestDataLakeRealE2E:
         
         # 使用 quants-infra data-lake sync 命令
         sync_cmd = f"""
-        cd ~/quants-infra && \
-        quants-infra data-lake sync cex_ticks --config config/data_lake.yml
+        cd ~/{test_config['quants_infra_dir']} && \
+        /home/ubuntu/.local/bin/quants-infra data-lake sync cex_ticks --config config/data_lake.yml
         """
         
         print("执行 Data Lake 同步命令...")
@@ -657,8 +775,8 @@ class TestDataLakeRealE2E:
         print_step(2, 3, "查看 Data Lake 统计信息")
         
         stats_cmd = f"""
-        cd ~/quants-infra && \
-        quants-infra data-lake stats cex_ticks --config config/data_lake.yml
+        cd ~/{test_config['quants_infra_dir']} && \
+        /home/ubuntu/.local/bin/quants-infra data-lake stats cex_ticks --config config/data_lake.yml
         """
         
         result = run_ssh_command(

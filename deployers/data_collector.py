@@ -53,7 +53,14 @@ class DataCollectorDeployer(BaseServiceManager):
         
         # 交易所配置
         self.exchange = config.get('exchange', 'gateio')
-        self.pairs = config.get('pairs', [])
+        pairs_config = config.get('pairs', [])
+        # 处理 pairs: 可以是列表或逗号分隔的字符串
+        if isinstance(pairs_config, str):
+            self.pairs = [p.strip() for p in pairs_config.split(',') if p.strip()]
+        elif isinstance(pairs_config, list):
+            self.pairs = pairs_config
+        else:
+            self.pairs = []
         self.metrics_port = int(config.get('metrics_port', self.DEFAULT_METRICS_PORT))
         self.metrics_bind_host = config.get('metrics_bind_host', '0.0.0.0')
         self.api_port = config.get(
@@ -103,7 +110,14 @@ class DataCollectorDeployer(BaseServiceManager):
         # 提取参数
         vpn_ip = kwargs.get('vpn_ip')
         exchange = kwargs.get('exchange', self.exchange)
-        pairs = kwargs.get('pairs', self.pairs)
+        pairs_param = kwargs.get('pairs', self.pairs)
+        # 处理 pairs: 可以是列表或逗号分隔的字符串
+        if isinstance(pairs_param, str):
+            pairs = [p.strip() for p in pairs_param.split(',') if p.strip()]
+        elif isinstance(pairs_param, list):
+            pairs = pairs_param
+        else:
+            pairs = self.pairs
         skip_monitoring = kwargs.get('skip_monitoring', False)
         skip_security = self.force_skip_security or kwargs.get('skip_security', False)
         
@@ -503,7 +517,8 @@ class DataCollectorDeployer(BaseServiceManager):
                 'snapshot_interval': exchange_config.get('snapshot_interval', 300),
                 'buffer_size': exchange_config.get('buffer_size', 100),
                 'flush_interval': exchange_config.get('flush_interval', 10.0),
-                'gap_warning_threshold': exchange_config.get('gap_warning_threshold', 50)
+                'gap_warning_threshold': exchange_config.get('gap_warning_threshold', 50),
+                'output_dir': self.config.get('output_dir', '/data/orderbook_ticks')
             }
         )
     
