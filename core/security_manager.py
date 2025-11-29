@@ -114,12 +114,25 @@ class SecurityManager:
             # 1. 加载规则配置
             rules_config = self._load_security_rules(rules_profile)
             
+            # 2. 保护核心配置不被规则文件覆盖
+            base_vars = self._get_base_vars()
+            
+            # 从规则配置中移除核心配置项，防止覆盖实例配置
+            core_config_keys = ['ssh_port', 'wireguard_port', 'vpn_network']
+            for key in core_config_keys:
+                if key in rules_config and key in base_vars:
+                    self.logger.warning(
+                        f"规则文件中的 {key}={rules_config[key]} 被忽略，"
+                        f"使用实例配置中的 {key}={base_vars[key]}"
+                    )
+                    rules_config.pop(key)
+            
             # 2. 运行防火墙配置 playbook
             result = self.ansible_manager.run_playbook(
                 playbook=str(self.playbook_dir / 'security' / '02_setup_firewall.yml'),
                 inventory=self._create_inventory(),
                 extra_vars={
-                    **self._get_base_vars(),
+                    **base_vars,
                     **rules_config
                 }
             )
@@ -144,6 +157,8 @@ class SecurityManager:
         3. 配置密钥认证
         4. 禁用 root 登录
         
+        重要：在修改SSH配置前，会先更新防火墙规则以开放新端口
+        
         Returns:
             bool: 配置是否成功
         """
@@ -151,13 +166,69 @@ class SecurityManager:
             self.logger.info("开始 SSH 安全加固...")
             
             # 准备变量，优先使用 new_ssh_port（目标端口）
-            vars_dict = self._get_base_vars()
+            current_port = self.config.get('ssh_port', 22)
             target_port = self.config.get('new_ssh_port', self.config.get('ssh_port', 6677))
+            
+            self.logger.info(f"SSH 端口将改为: {current_port} → {target_port}")
+            
+            # ⚡ 关键：如果SSH端口要改变，先更新防火墙规则以开放新端口
+            if current_port != target_port:
+                self.logger.info(f"更新防火墙规则以开放新SSH端口 {target_port}...")
+                
+                # 加载当前的防火墙规则profile
+                rules_profile = self.config.get('firewall_rules_profile', 'default')
+                rules_config = self._load_security_rules(rules_profile)
+                
+                # 准备防火墙配置的 extra_vars，使用目标端口
+                base_vars = self._get_base_vars()
+                base_vars['ssh_port'] = target_port  # 使用目标端口生成规则
+                
+                # 从规则配置中移除核心配置项，防止覆盖
+                core_config_keys = ['ssh_port', 'wireguard_port', 'vpn_network']
+                for key in core_config_keys:
+                    if key in rules_config and key in base_vars:
+                        self.logger.warning(
+                            f"规则文件中的 {key}={rules_config[key]} 被忽略，"
+                            f"使用实例配置中的 {key}={base_vars[key]}"
+                        )
+                        rules_config.pop(key)
+                
+                # 使用当前端口创建 inventory（SSH还在current_port）
+                inventory = {
+                    'all': {
+                        'hosts': {
+                            self.config['instance_ip']: {
+                                'ansible_host': self.config['instance_ip'],
+                                'ansible_user': self.config['ssh_user'],
+                                'ansible_ssh_private_key_file': self.config['ssh_key_path'],
+                                'ansible_port': current_port,  # 使用当前端口连接
+                                'ansible_python_interpreter': '/usr/bin/python3',
+                                'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+                            }
+                        }
+                    }
+                }
+                
+                # 直接运行防火墙 playbook，不调用 setup_firewall()
+                result = self.ansible_manager.run_playbook(
+                    playbook=str(self.playbook_dir / 'security' / '02_setup_firewall.yml'),
+                    inventory=inventory,
+                    extra_vars={
+                        **base_vars,
+                        **rules_config
+                    }
+                )
+                
+                if result.get('rc', 1) != 0:
+                    raise Exception("更新防火墙规则失败，取消SSH端口修改以保持安全")
+                
+                self.logger.info(f"✓ 防火墙已更新，端口 {target_port} 已开放")
+            
+            # 准备SSH加固的变量
+            vars_dict = self._get_base_vars()
             vars_dict['ssh_port'] = target_port
             
-            self.logger.info(f"SSH 端口将改为: {target_port}")
-            
-            # 创建自定义 inventory，使用端口 22 连接（SSH 还未切换）
+            # 创建自定义 inventory，使用当前端口连接（SSH 还未切换）
             inventory = {
                 'all': {
                     'hosts': {
@@ -165,7 +236,7 @@ class SecurityManager:
                             'ansible_host': self.config['instance_ip'],
                             'ansible_user': self.config['ssh_user'],
                             'ansible_ssh_private_key_file': self.config['ssh_key_path'],
-                            'ansible_port': 22,  # 使用当前端口（22），而不是目标端口（6677）
+                            'ansible_port': current_port,  # 使用当前端口连接
                             'ansible_python_interpreter': '/usr/bin/python3',
                             'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
                         }
@@ -215,6 +286,134 @@ class SecurityManager:
             self.logger.error(f"fail2ban 安装失败: {str(e)}")
             return False
     
+    def setup_tailscale(self, auth_key: str,
+                       advertise_routes: Optional[str] = None,
+                       accept_routes: bool = True) -> bool:
+        """
+        安装和配置 Tailscale VPN
+        
+        Args:
+            auth_key: Tailscale 认证密钥
+            advertise_routes: 可选，通告的子网路由（如 "10.0.0.0/24"）
+            accept_routes: 是否接受其他节点的路由
+        
+        Returns:
+            bool: 配置是否成功
+        """
+        try:
+            # 日志中隐藏认证密钥敏感信息
+            masked_key = auth_key[:15] + "***" if len(auth_key) > 15 else "***"
+            self.logger.info(f"安装 Tailscale VPN (key: {masked_key})...")
+            
+            # 构建 extra_vars
+            extra_vars = {
+                **self._get_base_vars(),
+                'tailscale_auth_key': auth_key,
+                'tailscale_accept_routes': accept_routes
+            }
+            
+            if advertise_routes:
+                extra_vars['tailscale_advertise_routes'] = advertise_routes
+            
+            # 运行 Tailscale playbook
+            result = self.ansible_manager.run_playbook(
+                playbook=str(self.playbook_dir / 'common' / 'setup_tailscale.yml'),
+                inventory=self._create_inventory(),
+                extra_vars=extra_vars
+            )
+            
+            if result.get('rc', 1) != 0:
+                raise Exception(f"Tailscale 安装失败: {result.get('stderr', 'Unknown error')}")
+            
+            self.logger.info("Tailscale VPN 安装完成")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Tailscale 安装失败: {str(e)}")
+            return False
+    
+    def adjust_firewall_for_tailscale(self) -> bool:
+        """
+        Tailscale 部署后调整防火墙
+        
+        包括:
+        1. 允许 Tailscale 接口流量
+        2. 限制监控端口仅 Tailscale 可访问
+        
+        Returns:
+            bool: 调整是否成功
+        """
+        try:
+            self.logger.info("调整防火墙以支持 Tailscale...")
+            
+            # 添加 Tailscale 特定参数
+            extra_vars = {
+                **self._get_base_vars(),
+                'tailscale_network': '100.64.0.0/10',  # Tailscale CGNAT 网络范围
+                'tailscale_interface': 'tailscale0'
+            }
+            
+            result = self.ansible_manager.run_playbook(
+                playbook=str(self.playbook_dir / 'security' / '07_adjust_for_tailscale.yml'),
+                inventory=self._create_inventory(),
+                extra_vars=extra_vars
+            )
+            
+            if result.get('rc', 1) != 0:
+                raise Exception(f"Tailscale 防火墙调整失败: {result.get('stderr', 'Unknown error')}")
+            
+            self.logger.info("Tailscale 防火墙调整完成")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Tailscale 防火墙调整失败: {str(e)}")
+            return False
+
+    def setup_tailscale(
+        self,
+        auth_key: str,
+        advertise_routes: Optional[str] = None,
+        accept_routes: bool = True
+    ) -> bool:
+        """
+        安装并配置 Tailscale VPN
+        
+        Args:
+            auth_key: Tailscale 认证密钥
+            advertise_routes: 可选，通告的子网路由（如 "10.0.0.0/24"）
+            accept_routes: 是否接受其他节点的路由
+        
+        Returns:
+            bool: 配置是否成功
+        """
+        try:
+            self.logger.info("安装并配置 Tailscale VPN...")
+            
+            extra_vars = {
+                **self._get_base_vars(),
+                'tailscale_auth_key': auth_key,
+                'tailscale_accept_routes': accept_routes
+            }
+            
+            if advertise_routes:
+                extra_vars['tailscale_advertise_routes'] = advertise_routes
+            
+            result = self.ansible_manager.run_playbook(
+                playbook=str(self.playbook_dir / 'common' / 'setup_tailscale.yml'),
+                inventory=self._create_inventory(),
+                extra_vars=extra_vars
+            )
+            
+            if result.get('rc', 1) != 0:
+                raise Exception(f"Tailscale 安装失败: {result.get('stderr', 'Unknown error')}")
+            
+            self.logger.info("Tailscale VPN 配置完成")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Tailscale 安装失败: {str(e)}")
+            return False
+    
     def adjust_firewall_for_vpn(self) -> bool:
         """
         VPN 部署后调整防火墙
@@ -262,11 +461,24 @@ class SecurityManager:
             # 加载服务特定的规则
             service_rules = self._load_security_rules(f"{service_type}_rules")
             
+            # 保护核心配置不被服务规则覆盖
+            base_vars = self._get_base_vars()
+            
+            # 从服务规则中移除核心配置项，防止覆盖
+            core_config_keys = ['ssh_port', 'wireguard_port']
+            for key in core_config_keys:
+                if key in service_rules and key in base_vars:
+                    self.logger.warning(
+                        f"服务规则中的 {key}={service_rules[key]} 被忽略，"
+                        f"使用实例配置中的 {key}={base_vars[key]}"
+                    )
+                    service_rules.pop(key)
+            
             result = self.ansible_manager.run_playbook(
                 playbook=str(self.playbook_dir / 'security' / '06_adjust_for_service.yml'),
                 inventory=self._create_inventory(),
                 extra_vars={
-                    **self._get_base_vars(),
+                    **base_vars,
                     'service_type': service_type,
                     **service_rules
                 }

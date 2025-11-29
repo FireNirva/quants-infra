@@ -7,6 +7,7 @@ Infrastructure CLI Commands
 import click
 import json
 import os
+import sys
 from typing import Optional
 from tabulate import tabulate
 from colorama import Fore, Style
@@ -48,15 +49,17 @@ def infra():
     管理 Lightsail 实例的创建、销毁、查询等操作。
     
     示例：
-        quants-ctl infra create --name test-node --bundle micro_3_0
-        quants-ctl infra list
-        quants-ctl infra destroy --name test-node
+        quants-infra infra create --name test-node --bundle micro_3_0
+        quants-infra infra list
+        quants-infra infra destroy --name test-node
     """
     pass
 
 
 @infra.command()
-@click.option('--name', required=True, help='实例名称（唯一标识符）')
+@click.option('--config', type=click.Path(exists=True),
+              help='配置文件路径（YAML/JSON）')
+@click.option('--name', required=False, help='实例名称（唯一标识符）')
 @click.option('--bundle', default='small_3_0', 
               help='实例规格：nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0')
 @click.option('--blueprint', default='ubuntu_22_04',
@@ -68,25 +71,50 @@ def infra():
 @click.option('--profile', help='AWS CLI profile 名称')
 @click.option('--tag', multiple=True, help='标签，格式：key=value')
 @click.option('--wait', is_flag=True, default=True, help='等待实例启动完成')
-def create(name: str, bundle: str, blueprint: str, region: str, az: Optional[str], 
-           key_pair: Optional[str], static_ip: bool, profile: Optional[str],
-           tag: tuple, wait: bool):
+def create(config: Optional[str], name: Optional[str], bundle: str, blueprint: str, 
+           region: str, az: Optional[str], key_pair: Optional[str], static_ip: bool, 
+           profile: Optional[str], tag: tuple, wait: bool):
     """
     Create a new Lightsail instance
     
     创建新的 Lightsail 实例并可选地分配静态 IP。
     
     示例：
-        创建小型实例：
-        $ quants-ctl infra create --name dev-collector-1 --bundle small_3_0
+        使用配置文件：
+        $ quants-infra infra create --config infra.yml
+        
+        配置文件 + CLI 参数覆盖：
+        $ quants-infra infra create --config infra.yml --name override-name
+        
+        传统方式（仍然支持）：
+        $ quants-infra infra create --name dev-collector-1 --bundle small_3_0
         
         创建带静态 IP 的实例：
-        $ quants-ctl infra create --name prod-monitor --bundle medium_3_0 --static-ip
-        
-        指定密钥对和标签：
-        $ quants-ctl infra create --name test-1 --key-pair my-key \\
-          --tag Environment=test --tag Team=Quant
+        $ quants-infra infra create --name prod-monitor --bundle medium_3_0 --static-ip
     """
+    # 加载配置文件（如果提供）
+    if config:
+        config_data = load_config(config)
+        # CLI 参数覆盖配置文件
+        name = name or config_data.get('name')
+        bundle = config_data.get('bundle', bundle)
+        blueprint = config_data.get('blueprint', blueprint)
+        region = config_data.get('region', region)
+        az = az or config_data.get('az')
+        key_pair = key_pair or config_data.get('key_pair')
+        static_ip = static_ip or config_data.get('static_ip', False)
+        profile = profile or config_data.get('profile')
+        # 处理 tags
+        if not tag and config_data.get('tags'):
+            if isinstance(config_data['tags'], dict):
+                # YAML 格式: {env: prod, team: infra}
+                tag = tuple(f"{k}={v}" for k, v in config_data['tags'].items())
+    
+    # 验证必需参数
+    if not name:
+        click.echo(f"{Fore.RED}✗ 错误: --name 参数是必需的（通过 CLI 或配置文件提供）{Style.RESET_ALL}", err=True)
+        sys.exit(1)
+    
     click.echo(f"{Fore.CYAN}正在创建 Lightsail 实例: {name}{Style.RESET_ALL}")
     
     try:
@@ -141,11 +169,13 @@ def create(name: str, bundle: str, blueprint: str, region: str, az: Optional[str
 
 
 @infra.command()
-@click.option('--name', required=True, help='实例名称')
+@click.option('--config', type=click.Path(exists=True),
+              help='配置文件路径（YAML/JSON）')
+@click.option('--name', required=False, help='实例名称')
 @click.option('--profile', help='AWS CLI profile 名称')
 @click.option('--region', default='ap-northeast-1', help='AWS 区域')
 @click.option('--force', is_flag=True, help='强制删除，跳过确认')
-def destroy(name: str, profile: Optional[str], region: str, force: bool):
+def destroy(config: Optional[str], name: Optional[str], profile: Optional[str], region: str, force: bool):
     """
     Destroy a Lightsail instance
     
@@ -154,12 +184,31 @@ def destroy(name: str, profile: Optional[str], region: str, force: bool):
     ⚠️  警告：此操作不可逆！
     
     示例：
-        销毁实例（需要确认）：
-        $ quants-ctl infra destroy --name test-node
+        使用配置文件：
+        $ quants-infra infra destroy --config infra_destroy.yml
         
-        强制销毁（跳过确认）：
-        $ quants-ctl infra destroy --name test-node --force
+        配置文件 + CLI 覆盖：
+        $ quants-infra infra destroy --config infra_destroy.yml --force
+        
+        传统方式（仍然支持）：
+        $ quants-infra infra destroy --name test-node
+        
+        强制销毁：
+        $ quants-infra infra destroy --name test-node --force
     """
+    # 加载配置文件（如果提供）
+    if config:
+        config_data = load_config(config)
+        name = name or config_data.get('name')
+        region = config_data.get('region', region)
+        profile = profile or config_data.get('profile')
+        force = force or config_data.get('force', False)
+    
+    # 验证必需参数
+    if not name:
+        click.echo(f"{Fore.RED}✗ 错误: --name 参数是必需的（通过 CLI 或配置文件提供）{Style.RESET_ALL}", err=True)
+        sys.exit(1)
+    
     click.echo(f"{Fore.YELLOW}⚠️  准备销毁实例: {name}{Style.RESET_ALL}")
     
     try:
@@ -199,27 +248,40 @@ def destroy(name: str, profile: Optional[str], region: str, force: bool):
 
 
 @infra.command(name='list')
+@click.option('--config', type=click.Path(exists=True),
+              help='配置文件路径（YAML/JSON）')
 @click.option('--profile', help='AWS CLI profile 名称')
 @click.option('--region', default='ap-northeast-1', help='AWS 区域')
 @click.option('--output', type=click.Choice(['table', 'json']), default='table',
               help='输出格式')
 @click.option('--status', help='按状态过滤：running, stopped, pending')
-def list_instances(profile: Optional[str], region: str, output: str, status: Optional[str]):
+def list_instances(config: Optional[str], profile: Optional[str], region: str, output: str, status: Optional[str]):
     """
     List all Lightsail instances
     
     列出所有 Lightsail 实例及其状态。
     
     示例：
-        列出所有实例：
-        $ quants-ctl infra list
+        使用配置文件：
+        $ quants-infra infra list --config infra_list.yml
+        
+        传统方式（仍然支持）：
+        $ quants-infra infra list
         
         只显示运行中的实例：
-        $ quants-ctl infra list --status running
+        $ quants-infra infra list --status running
         
         JSON 格式输出：
-        $ quants-ctl infra list --output json
+        $ quants-infra infra list --output json
     """
+    # 加载配置文件（如果提供）
+    if config:
+        config_data = load_config(config)
+        region = config_data.get('region', region)
+        profile = profile or config_data.get('profile')
+        output = config_data.get('output', output)
+        status = status or config_data.get('status')
+    
     try:
         manager = get_lightsail_manager(profile, region)
         
@@ -262,20 +324,41 @@ def list_instances(profile: Optional[str], region: str, output: str, status: Opt
 
 
 @infra.command()
-@click.option('--name', required=True, help='实例名称')
+@click.option('--config', type=click.Path(exists=True),
+              help='配置文件路径（YAML/JSON）')
+@click.option('--name', required=False, help='实例名称')
 @click.option('--profile', help='AWS CLI profile 名称')
 @click.option('--region', default='ap-northeast-1', help='AWS 区域')
 @click.option('--output', type=click.Choice(['table', 'json']), default='table',
               help='输出格式')
-def info(name: str, profile: Optional[str], region: str, output: str):
+def info(config: Optional[str], name: Optional[str], profile: Optional[str], region: str, output: str):
     """
     Show detailed information about an instance
     
     显示指定实例的详细信息。
     
     示例：
-        $ quants-ctl infra info --name dev-collector-1
+        使用配置文件：
+        $ quants-infra infra info --config infra_info.yml
+        
+        配置文件 + CLI 覆盖：
+        $ quants-infra infra info --config infra_info.yml --output json
+        
+        传统方式（仍然支持）：
+        $ quants-infra infra info --name dev-collector-1
     """
+    # 加载配置文件（如果提供）
+    if config:
+        config_data = load_config(config)
+        name = name or config_data.get('name')
+        region = config_data.get('region', region)
+        profile = profile or config_data.get('profile')
+        output = config_data.get('output', output)
+    
+    # 验证必需参数
+    if not name:
+        click.echo(f"{Fore.RED}✗ 错误: --name 参数是必需的（通过 CLI 或配置文件提供）{Style.RESET_ALL}", err=True)
+        sys.exit(1)
     try:
         manager = get_lightsail_manager(profile, region)
         
@@ -324,28 +407,55 @@ def info(name: str, profile: Optional[str], region: str, output: str):
 
 
 @infra.command()
-@click.option('--name', required=True, help='实例名称')
-@click.option('--action', required=True, type=click.Choice(['start', 'stop', 'reboot']),
+@click.option('--config', type=click.Path(exists=True),
+              help='配置文件路径（YAML/JSON）')
+@click.option('--name', required=False, help='实例名称')
+@click.option('--action', required=False, type=click.Choice(['start', 'stop', 'reboot']),
               help='操作：start, stop, reboot')
 @click.option('--profile', help='AWS CLI profile 名称')
 @click.option('--region', default='ap-northeast-1', help='AWS 区域')
 @click.option('--force', is_flag=True, help='强制操作（适用于 stop）')
-def manage(name: str, action: str, profile: Optional[str], region: str, force: bool):
+def manage(config: Optional[str], name: Optional[str], action: Optional[str], 
+           profile: Optional[str], region: str, force: bool):
     """
     Manage instance lifecycle (start/stop/reboot)
     
     管理实例的生命周期操作。
     
     示例：
-        启动实例：
-        $ quants-ctl infra manage --name dev-collector-1 --action start
+        使用配置文件：
+        $ quants-infra infra manage --config infra_manage.yml
+        
+        配置文件 + CLI 覆盖：
+        $ quants-infra infra manage --config infra_manage.yml --action stop
+        
+        传统方式（仍然支持）：
+        $ quants-infra infra manage --name dev-collector-1 --action start
         
         停止实例：
-        $ quants-ctl infra manage --name dev-collector-1 --action stop
+        $ quants-infra infra manage --name dev-collector-1 --action stop
         
         重启实例：
-        $ quants-ctl infra manage --name dev-collector-1 --action reboot
+        $ quants-infra infra manage --name dev-collector-1 --action reboot
     """
+    # 加载配置文件（如果提供）
+    if config:
+        config_data = load_config(config)
+        name = name or config_data.get('name')
+        action = action or config_data.get('action')
+        region = config_data.get('region', region)
+        profile = profile or config_data.get('profile')
+        force = force or config_data.get('force', False)
+    
+    # 验证必需参数
+    if not name:
+        click.echo(f"{Fore.RED}✗ 错误: --name 参数是必需的（通过 CLI 或配置文件提供）{Style.RESET_ALL}", err=True)
+        sys.exit(1)
+    
+    if not action:
+        click.echo(f"{Fore.RED}✗ 错误: --action 参数是必需的（通过 CLI 或配置文件提供）{Style.RESET_ALL}", err=True)
+        sys.exit(1)
+    
     click.echo(f"{Fore.CYAN}正在{action}实例: {name}{Style.RESET_ALL}")
     
     try:

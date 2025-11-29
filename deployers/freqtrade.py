@@ -264,12 +264,39 @@ class FreqtradeDeployer(BaseServiceManager):
         return self._run_ansible_playbook('setup_wireguard.yml', [host])
     
     def _setup_freqtrade(self, host: str, freqtrade_cfg: Dict) -> bool:
-        """部署 Freqtrade"""
+        """
+        部署 Freqtrade
+        
+        Args:
+            host: 目标主机
+            freqtrade_cfg: Freqtrade 配置字典
+        
+        Returns:
+            bool: 是否成功
+        """
         self.logger.info(f"[{host}] Setting up Freqtrade...")
+        
+        # 转换配置格式为 Ansible 期望的变量
+        ansible_vars = {
+            # 基础配置模板变量
+            'exchange_name': freqtrade_cfg.get('exchange', 'binance'),
+            'strategy': freqtrade_cfg.get('strategy', 'SampleStrategy'),
+            'dry_run': freqtrade_cfg.get('dry_run', True),
+            'api_port': freqtrade_cfg.get('api_port', 8080),
+            'stake_currency': freqtrade_cfg.get('stake_currency', 'USDT'),
+            'max_open_trades': freqtrade_cfg.get('max_open_trades', 3),
+            
+            # Docker compose 模板需要的文件名变量
+            'freqtrade_base_config': 'base_config.json',
+            
+            # 策略名称（从 strategy 转换为文件名格式）
+            'strategy_name': freqtrade_cfg.get('strategy', 'SampleStrategy'),
+        }
+        
         return self._run_ansible_playbook(
             'setup_freqtrade.yml',
             [host],
-            freqtrade_cfg
+            ansible_vars
         )
     
     def _setup_monitoring(self, host: str) -> bool:
@@ -334,12 +361,35 @@ class FreqtradeDeployer(BaseServiceManager):
             bool: 是否成功
         """
         try:
-            # 构建 inventory
+            # 配置 SSH 连接参数
+            ssh_key_path = self.config.get('ssh_key_path', '~/.ssh/lightsail_key.pem')
+            ssh_user = self.config.get('ssh_user', 'ubuntu')
+            ssh_port = self.config.get('ssh_port', 22)
+            
+            # 展开路径中的 ~
+            ssh_key_path = os.path.expanduser(ssh_key_path)
+            
+            # 调试日志
+            self.logger.info(f"[DEBUG] SSH Config: user={ssh_user}, port={ssh_port}, key={ssh_key_path}")
+            self.logger.info(f"[DEBUG] Target hosts: {hosts}")
+            
+            # 构建 inventory 包含 SSH 连接参数
             inventory = {
                 'all': {
-                    'hosts': {host: {} for host in hosts}
+                    'hosts': {
+                        host: {
+                            'ansible_host': host,
+                            'ansible_user': ssh_user,
+                            'ansible_port': ssh_port,
+                            'ansible_ssh_private_key_file': ssh_key_path,
+                            'ansible_ssh_common_args': '-o StrictHostKeyChecking=no'
+                        } for host in hosts
+                    }
                 }
             }
+            
+            # 调试日志：打印 inventory
+            self.logger.info(f"[DEBUG] Inventory: {inventory}")
             
             # 运行 playbook
             result = ansible_runner.run(

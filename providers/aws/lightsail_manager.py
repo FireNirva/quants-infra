@@ -679,7 +679,7 @@ class LightsailManager(BaseInfraManager):
             'hardware': {
                 'cpu_count': raw_info.get('hardware', {}).get('cpuCount'),
                 'ram_size_gb': raw_info.get('hardware', {}).get('ramSizeInGb'),
-                'disk_size_gb': raw_info.get('hardware', {}).get('disks', [{}])[0].get('sizeInGb')
+                'disk_size_gb': raw_info.get('hardware', {}).get('disks', [{}])[0].get('sizeInGb') if raw_info.get('hardware', {}).get('disks') else None
             }
         }
 

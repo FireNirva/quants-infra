@@ -303,7 +303,7 @@ class MonitorDeployer(BaseServiceManager):
             
         except Exception as e:
             self.logger.error(f"Health check error: {e}")
-            self.logger.error("提示：健康检查需要 SSH 隧道。请运行: quants-ctl monitor tunnel --host <IP>")
+            self.logger.error("提示：健康检查需要 SSH 隧道。请运行: quants-infra monitor tunnel --host <IP>")
             return {
                 'status': 'unknown',
                 'metrics': {},

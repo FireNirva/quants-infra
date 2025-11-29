@@ -336,6 +336,7 @@ pipelining = True
         inventory_lines.append('')
         inventory_lines.append('[target:vars]')
         inventory_lines.append('ansible_python_interpreter=/usr/bin/python3')
-        inventory_lines.append('ansible_ssh_common_args=-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null')
+        inventory_lines.append('ansible_ssh_common_args=-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlMaster=auto -o ControlPersist=60s -o ConnectTimeout=30')
+        inventory_lines.append('ansible_ssh_retries=5')
         
         return '\n'.join(inventory_lines) 

@@ -12,6 +12,7 @@ from typing import Dict, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from deployers.data_collector import DataCollectorDeployer
+from core.utils.config import load_config
 
 
 def get_deployer(host: str, vpn_ip: str, exchange: str = 'gateio', **kwargs) -> DataCollectorDeployer:
@@ -40,12 +41,14 @@ def data_collector():
 
 
 @data_collector.command()
-@click.option('--host', required=True, help='数据采集节点 IP')
-@click.option('--vpn-ip', required=True, help='VPN IP 地址')
+@click.option('--config', type=click.Path(exists=True),
+              help='配置文件路径（YAML/JSON）')
+@click.option('--host', required=False, help='数据采集节点 IP')
+@click.option('--vpn-ip', required=False, help='VPN IP 地址')
 @click.option('--monitor-vpn-ip', help='监控节点 VPN IP（可选）')
 @click.option('--exchange', default='gateio', type=click.Choice(['gateio', 'mexc']),
               help='交易所名称')
-@click.option('--pairs', required=True, help='交易对列表（逗号分隔）')
+@click.option('--pairs', required=False, help='交易对列表（逗号分隔）')
 @click.option('--metrics-port', default=8000, type=int,
               help='Prometheus 指标端口')
 @click.option('--github-repo', default='https://github.com/hummingbot/quants-lab.git',
@@ -62,21 +65,59 @@ def data_collector():
               help='跳过监控配置')
 @click.option('--skip-security', is_flag=True,
               help='跳过安全配置')
-def deploy(host, vpn_ip, monitor_vpn_ip, exchange, pairs, metrics_port,
+def deploy(config, host, vpn_ip, monitor_vpn_ip, exchange, pairs, metrics_port,
            github_repo, github_branch, ssh_key, ssh_port, ssh_user,
            skip_monitoring, skip_security):
     """
     部署数据采集器到指定节点
     
     示例:
+        使用配置文件：
+        $ quants-infra data-collector deploy --config data_collector_deploy.yml
+        
+        传统方式（仍然支持）：
     
-        quants-ctl data-collector deploy \\
+    示例:
+    
+        quants-infra data-collector deploy \\
           --host 54.XXX.XXX.XXX \\
           --vpn-ip 10.0.0.2 \\
           --monitor-vpn-ip 10.0.0.1 \\
           --exchange gateio \\
           --pairs VIRTUAL-USDT,IRON-USDT,BNKR-USDT
     """
+    # 加载配置文件（如果提供）
+    if config:
+        config_data = load_config(config)
+        host = host or config_data.get('host')
+        vpn_ip = vpn_ip or config_data.get('vpn_ip')
+        monitor_vpn_ip = monitor_vpn_ip or config_data.get('monitor_vpn_ip')
+        exchange = config_data.get('exchange', exchange)
+        pairs = pairs or config_data.get('pairs')
+        if isinstance(pairs, list):
+            pairs = ','.join(pairs)
+        metrics_port = config_data.get('metrics_port', metrics_port)
+        github_repo = config_data.get('github_repo', github_repo)
+        github_branch = config_data.get('github_branch', github_branch)
+        ssh_key = config_data.get('ssh_key', ssh_key)
+        ssh_port = config_data.get('ssh_port', ssh_port)
+        ssh_user = config_data.get('ssh_user', ssh_user)
+        skip_monitoring = skip_monitoring or config_data.get('skip_monitoring', False)
+        skip_security = skip_security or config_data.get('skip_security', False)
+    
+    # 验证必需参数
+    if not host:
+        click.echo("✗ 错误: host 是必需的（通过 CLI 或配置文件提供）", err=True)
+        sys.exit(1)
+    
+    if not vpn_ip:
+        click.echo("✗ 错误: vpn_ip 是必需的（通过 CLI 或配置文件提供）", err=True)
+        sys.exit(1)
+    
+    if not pairs:
+        click.echo("✗ 错误: pairs 是必需的（通过 CLI 或配置文件提供）", err=True)
+        sys.exit(1)
+    
     click.echo(f"🚀 开始部署 {exchange} 数据采集器...")
     click.echo(f"   目标主机: {host}")
     click.echo(f"   VPN IP: {vpn_ip}")
@@ -121,9 +162,9 @@ def deploy(host, vpn_ip, monitor_vpn_ip, exchange, pairs, metrics_port,
                 click.echo(f"  • 监控节点: {monitor_vpn_ip}")
             click.echo()
             click.echo("管理命令:")
-            click.echo(f"  • 查看状态: quants-ctl data-collector status --host {host} --exchange {exchange}")
-            click.echo(f"  • 查看日志: quants-ctl data-collector logs --host {host} --exchange {exchange} -f")
-            click.echo(f"  • 重启服务: quants-ctl data-collector restart --host {host} --exchange {exchange}")
+            click.echo(f"  • 查看状态: quants-infra data-collector status --host {host} --exchange {exchange}")
+            click.echo(f"  • 查看日志: quants-infra data-collector logs --host {host} --exchange {exchange} -f")
+            click.echo(f"  • 重启服务: quants-infra data-collector restart --host {host} --exchange {exchange}")
         else:
             click.echo("❌ 部署失败！请查看日志了解详情。", err=True)
             sys.exit(1)
@@ -136,24 +177,38 @@ def deploy(host, vpn_ip, monitor_vpn_ip, exchange, pairs, metrics_port,
 
 
 @data_collector.command()
-@click.option('--host', required=True, help='数据采集节点 IP')
-@click.option('--vpn-ip', required=True, help='VPN IP 地址')
+@click.option('--config', type=click.Path(exists=True), help='配置文件路径（YAML/JSON）')
+@click.option('--host', required=False, help='数据采集节点 IP')
+@click.option('--vpn-ip', required=False, help='VPN IP 地址')
 @click.option('--exchange', default='gateio', type=click.Choice(['gateio', 'mexc']),
               help='交易所名称')
 @click.option('--ssh-key', default='~/.ssh/lightsail_key.pem')
 @click.option('--ssh-port', default=22, type=int)
 @click.option('--ssh-user', default='ubuntu')
-def start(host, vpn_ip, exchange, ssh_key, ssh_port, ssh_user):
+def start(config, host, vpn_ip, exchange, ssh_key, ssh_port, ssh_user):
     """
     启动数据采集器服务
     
     示例:
-    
-        quants-ctl data-collector start \\
-          --host 54.XXX.XXX.XXX \\
-          --vpn-ip 10.0.0.2 \\
-          --exchange gateio
+        使用配置文件：
+        $ quants-infra data-collector start --config data_collector_manage.yml
+        
+        传统方式：
+        $ quants-infra data-collector start --host 54.XXX --vpn-ip 10.0.0.2 --exchange gateio
     """
+    if config:
+        config_data = load_config(config)
+        host = host or config_data.get('host')
+        vpn_ip = vpn_ip or config_data.get('vpn_ip')
+        exchange = config_data.get('exchange', exchange)
+        ssh_key = config_data.get('ssh_key', ssh_key)
+        ssh_port = config_data.get('ssh_port', ssh_port)
+        ssh_user = config_data.get('ssh_user', ssh_user)
+    
+    if not host or not vpn_ip:
+        click.echo("✗ 错误: host和vpn_ip是必需的", err=True)
+        sys.exit(1)
+    
     click.echo(f"▶️  启动 {exchange} 数据采集器...")
     
     deployer = get_deployer(
@@ -180,23 +235,37 @@ def start(host, vpn_ip, exchange, ssh_key, ssh_port, ssh_user):
 
 
 @data_collector.command()
-@click.option('--host', required=True, help='数据采集节点 IP')
-@click.option('--vpn-ip', required=True, help='VPN IP 地址')
+@click.option('--config', type=click.Path(exists=True), help='配置文件路径（YAML/JSON）')
+@click.option('--host', required=False, help='数据采集节点 IP')
+@click.option('--vpn-ip', required=False, help='VPN IP 地址')
 @click.option('--exchange', default='gateio', type=click.Choice(['gateio', 'mexc']))
 @click.option('--ssh-key', default='~/.ssh/lightsail_key.pem')
 @click.option('--ssh-port', default=22, type=int)
 @click.option('--ssh-user', default='ubuntu')
-def stop(host, vpn_ip, exchange, ssh_key, ssh_port, ssh_user):
+def stop(config, host, vpn_ip, exchange, ssh_key, ssh_port, ssh_user):
     """
     停止数据采集器服务
     
     示例:
-    
-        quants-ctl data-collector stop \\
-          --host 54.XXX.XXX.XXX \\
-          --vpn-ip 10.0.0.2 \\
-          --exchange gateio
+        使用配置文件：
+        $ quants-infra data-collector stop --config data_collector_manage.yml
+        
+        传统方式：
+        $ quants-infra data-collector stop --host 54.XXX --vpn-ip 10.0.0.2 --exchange gateio
     """
+    if config:
+        config_data = load_config(config)
+        host = host or config_data.get('host')
+        vpn_ip = vpn_ip or config_data.get('vpn_ip')
+        exchange = config_data.get('exchange', exchange)
+        ssh_key = config_data.get('ssh_key', ssh_key)
+        ssh_port = config_data.get('ssh_port', ssh_port)
+        ssh_user = config_data.get('ssh_user', ssh_user)
+    
+    if not host or not vpn_ip:
+        click.echo("✗ 错误: host和vpn_ip是必需的", err=True)
+        sys.exit(1)
+    
     click.echo(f"⏸  停止 {exchange} 数据采集器...")
     
     deployer = get_deployer(
@@ -223,23 +292,37 @@ def stop(host, vpn_ip, exchange, ssh_key, ssh_port, ssh_user):
 
 
 @data_collector.command()
-@click.option('--host', required=True, help='数据采集节点 IP')
-@click.option('--vpn-ip', required=True, help='VPN IP 地址')
+@click.option('--config', type=click.Path(exists=True), help='配置文件路径（YAML/JSON）')
+@click.option('--host', required=False, help='数据采集节点 IP')
+@click.option('--vpn-ip', required=False, help='VPN IP 地址')
 @click.option('--exchange', default='gateio', type=click.Choice(['gateio', 'mexc']))
 @click.option('--ssh-key', default='~/.ssh/lightsail_key.pem')
 @click.option('--ssh-port', default=22, type=int)
 @click.option('--ssh-user', default='ubuntu')
-def restart(host, vpn_ip, exchange, ssh_key, ssh_port, ssh_user):
+def restart(config, host, vpn_ip, exchange, ssh_key, ssh_port, ssh_user):
     """
     重启数据采集器服务
     
     示例:
-    
-        quants-ctl data-collector restart \\
-          --host 54.XXX.XXX.XXX \\
-          --vpn-ip 10.0.0.2 \\
-          --exchange gateio
+        使用配置文件：
+        $ quants-infra data-collector restart --config data_collector_manage.yml
+        
+        传统方式：
+        $ quants-infra data-collector restart --host 54.XXX --vpn-ip 10.0.0.2 --exchange gateio
     """
+    if config:
+        config_data = load_config(config)
+        host = host or config_data.get('host')
+        vpn_ip = vpn_ip or config_data.get('vpn_ip')
+        exchange = config_data.get('exchange', exchange)
+        ssh_key = config_data.get('ssh_key', ssh_key)
+        ssh_port = config_data.get('ssh_port', ssh_port)
+        ssh_user = config_data.get('ssh_user', ssh_user)
+    
+    if not host or not vpn_ip:
+        click.echo("✗ 错误: host和vpn_ip是必需的", err=True)
+        sys.exit(1)
+    
     click.echo(f"🔄 重启 {exchange} 数据采集器...")
     
     deployer = get_deployer(
@@ -266,24 +349,39 @@ def restart(host, vpn_ip, exchange, ssh_key, ssh_port, ssh_user):
 
 
 @data_collector.command()
-@click.option('--host', required=True, help='数据采集节点 IP')
-@click.option('--vpn-ip', required=True, help='VPN IP 地址')
+@click.option('--config', type=click.Path(exists=True), help='配置文件路径（YAML/JSON）')
+@click.option('--host', required=False, help='数据采集节点 IP')
+@click.option('--vpn-ip', required=False, help='VPN IP 地址')
 @click.option('--exchange', default='gateio', type=click.Choice(['gateio', 'mexc']))
 @click.option('--metrics-port', default=8000, type=int)
 @click.option('--ssh-key', default='~/.ssh/lightsail_key.pem')
 @click.option('--ssh-port', default=22, type=int)
 @click.option('--ssh-user', default='ubuntu')
-def status(host, vpn_ip, exchange, metrics_port, ssh_key, ssh_port, ssh_user):
+def status(config, host, vpn_ip, exchange, metrics_port, ssh_key, ssh_port, ssh_user):
     """
     查看数据采集器状态
     
     示例:
-    
-        quants-ctl data-collector status \\
-          --host 54.XXX.XXX.XXX \\
-          --vpn-ip 10.0.0.2 \\
-          --exchange gateio
+        使用配置文件：
+        $ quants-infra data-collector status --config data_collector_manage.yml
+        
+        传统方式：
+        $ quants-infra data-collector status --host 54.XXX --vpn-ip 10.0.0.2 --exchange gateio
     """
+    if config:
+        config_data = load_config(config)
+        host = host or config_data.get('host')
+        vpn_ip = vpn_ip or config_data.get('vpn_ip')
+        exchange = config_data.get('exchange', exchange)
+        metrics_port = config_data.get('metrics_port', metrics_port)
+        ssh_key = config_data.get('ssh_key', ssh_key)
+        ssh_port = config_data.get('ssh_port', ssh_port)
+        ssh_user = config_data.get('ssh_user', ssh_user)
+    
+    if not host or not vpn_ip:
+        click.echo("✗ 错误: host和vpn_ip是必需的", err=True)
+        sys.exit(1)
+    
     click.echo(f"🔍 检查 {exchange} 数据采集器状态...\n")
     
     deployer = get_deployer(
@@ -327,33 +425,48 @@ def status(host, vpn_ip, exchange, metrics_port, ssh_key, ssh_port, ssh_user):
 
 
 @data_collector.command()
-@click.option('--host', required=True, help='数据采集节点 IP')
-@click.option('--vpn-ip', required=True, help='VPN IP 地址')
+@click.option('--config', type=click.Path(exists=True), help='配置文件路径（YAML/JSON）')
+@click.option('--host', required=False, help='数据采集节点 IP')
+@click.option('--vpn-ip', required=False, help='VPN IP 地址')
 @click.option('--exchange', default='gateio', type=click.Choice(['gateio', 'mexc']))
 @click.option('--lines', default=100, type=int, help='显示的日志行数')
 @click.option('--follow', '-f', is_flag=True, help='持续输出日志')
 @click.option('--ssh-key', default='~/.ssh/lightsail_key.pem')
 @click.option('--ssh-port', default=22, type=int)
 @click.option('--ssh-user', default='ubuntu')
-def logs(host, vpn_ip, exchange, lines, follow, ssh_key, ssh_port, ssh_user):
+def logs(config, host, vpn_ip, exchange, lines, follow, ssh_key, ssh_port, ssh_user):
     """
     查看数据采集器日志
     
     示例:
     
         # 查看最后 100 行日志
-        quants-ctl data-collector logs \\
+        quants-infra data-collector logs \\
           --host 54.XXX.XXX.XXX \\
           --vpn-ip 10.0.0.2 \\
           --exchange gateio
         
         # 持续输出日志
-        quants-ctl data-collector logs \\
-          --host 54.XXX.XXX.XXX \\
-          --vpn-ip 10.0.0.2 \\
-          --exchange gateio \\
-          --follow
+        $ quants-infra data-collector logs --host 54.XXX --vpn-ip 10.0.0.2 --exchange gateio --follow
+        
+        使用配置文件：
+        $ quants-infra data-collector logs --config data_collector_manage.yml --follow
     """
+    if config:
+        config_data = load_config(config)
+        host = host or config_data.get('host')
+        vpn_ip = vpn_ip or config_data.get('vpn_ip')
+        exchange = config_data.get('exchange', exchange)
+        ssh_key = config_data.get('ssh_key', ssh_key)
+        ssh_port = config_data.get('ssh_port', ssh_port)
+        ssh_user = config_data.get('ssh_user', ssh_user)
+        lines = config_data.get('lines', lines)
+        follow = follow or config_data.get('follow', False)
+    
+    if not host or not vpn_ip:
+        click.echo("✗ 错误: host和vpn_ip是必需的", err=True)
+        sys.exit(1)
+    
     if follow:
         click.echo(f"📋 持续输出 {exchange} 数据采集器日志（按 Ctrl+C 停止）...\n")
         
@@ -394,25 +507,41 @@ def logs(host, vpn_ip, exchange, lines, follow, ssh_key, ssh_port, ssh_user):
 
 
 @data_collector.command()
-@click.option('--host', required=True, help='数据采集节点 IP')
-@click.option('--vpn-ip', required=True, help='VPN IP 地址')
+@click.option('--config', type=click.Path(exists=True), help='配置文件路径（YAML/JSON）')
+@click.option('--host', required=False, help='数据采集节点 IP')
+@click.option('--vpn-ip', required=False, help='VPN IP 地址')
 @click.option('--exchange', default='gateio', type=click.Choice(['gateio', 'mexc']))
 @click.option('--github-repo', default='https://github.com/hummingbot/quants-lab.git')
 @click.option('--github-branch', default='main')
 @click.option('--ssh-key', default='~/.ssh/lightsail_key.pem')
 @click.option('--ssh-port', default=22, type=int)
 @click.option('--ssh-user', default='ubuntu')
-def update(host, vpn_ip, exchange, github_repo, github_branch, ssh_key, ssh_port, ssh_user):
+def update(config, host, vpn_ip, exchange, github_repo, github_branch, ssh_key, ssh_port, ssh_user):
     """
     更新数据采集器代码
     
     示例:
-    
-        quants-ctl data-collector update \\
-          --host 54.XXX.XXX.XXX \\
-          --vpn-ip 10.0.0.2 \\
-          --exchange gateio
+        使用配置文件：
+        $ quants-infra data-collector update --config data_collector_manage.yml
+        
+        传统方式：
+        $ quants-infra data-collector update --host 54.XXX --vpn-ip 10.0.0.2 --exchange gateio
     """
+    if config:
+        config_data = load_config(config)
+        host = host or config_data.get('host')
+        vpn_ip = vpn_ip or config_data.get('vpn_ip')
+        exchange = config_data.get('exchange', exchange)
+        github_repo = config_data.get('github_repo', github_repo)
+        github_branch = config_data.get('github_branch', github_branch)
+        ssh_key = config_data.get('ssh_key', ssh_key)
+        ssh_port = config_data.get('ssh_port', ssh_port)
+        ssh_user = config_data.get('ssh_user', ssh_user)
+    
+    if not host or not vpn_ip:
+        click.echo("✗ 错误: host和vpn_ip是必需的", err=True)
+        sys.exit(1)
+    
     click.echo(f"🔄 更新 {exchange} 数据采集器代码...")
     
     deployer = get_deployer(
