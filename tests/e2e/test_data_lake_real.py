@@ -630,7 +630,7 @@ class TestDataLakeRealE2E:
             trigger_cmd = """
             cd /opt/quants-lab && \
             timeout 60 /opt/miniconda3/bin/conda run --no-capture-output -n quants-lab \
-                python cli.py trigger-task orderbook_tick_gateio \
+                python cli.py trigger-task --task orderbook_tick_gateio \
                 --config config/orderbook_tick_gateio.yml \
                 --timeout 50 2>&1 || echo "Trigger failed or timed out"
             """

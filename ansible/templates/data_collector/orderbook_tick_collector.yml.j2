@@ -23,6 +23,7 @@ tasks:
         - "{{ pair }}"
       {% endfor %}
       
+      metrics_port: {{ metrics_port | default(8000) }}
       depth_limit: {{ depth_limit | default(100) }}
       snapshot_interval: {{ snapshot_interval | default(300) }}
       buffer_size: {{ buffer_size | default(100) }}
