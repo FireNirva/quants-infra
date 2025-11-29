@@ -22,10 +22,10 @@
 # SSH 访问（带暴力破解防护）
 # ============================================
 
-# SSH brute-force 防护：60秒内最多4次连接尝试
+# SSH brute-force 防护：60秒内最多20次连接尝试（提高阈值，避免自动化测试自锁）
 -A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -m state --state NEW -m recent --set --name SSH
--A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -m state --state NEW -m recent --update --seconds 60 --hitcount 4 --name SSH -j LOG --log-prefix "SSH-brute-force: " --log-level 4
--A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -m state --state NEW -m recent --update --seconds 60 --hitcount 4 --name SSH -j DROP
+-A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -m state --state NEW -m recent --update --seconds 60 --hitcount 20 --name SSH -j LOG --log-prefix "SSH-brute-force: " --log-level 4
+-A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -m state --state NEW -m recent --update --seconds 60 --hitcount 20 --name SSH -j DROP
 -A INPUT -p tcp --dport {{ ssh_port | default(6677) }} -j ACCEPT -m comment --comment "SSH"
 {% if ssh_port is not defined or ssh_port != 22 %}
 # 兼容固定的 22 端口（防止管理端口被意外阻断）

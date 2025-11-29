@@ -1,4 +1,3 @@
----
 version: '3'
 services:
   freqtrade:
@@ -8,7 +7,9 @@ services:
       trade
       --logfile /freqtrade/user_data/logs/freqtrade.log
       --config /freqtrade/user_data/{{ base_config }}
+      {% if strategy_config is defined and strategy_config %}
       --config /freqtrade/user_data/{{ strategy_config }}
+      {% endif %}
       --strategy {{ strategy_name }}
     restart: unless-stopped
     container_name: freqtrade

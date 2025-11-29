@@ -60,7 +60,7 @@
 
     - name: 配置 WireGuard
       template:
-        src: "{{ playbook_dir }}/../templates/vpn/wg0.conf.j2"
+        src: "{{ playbook_dir }}/../../templates/common/vpn/wg0.conf.j2"
         dest: /etc/wireguard/wg0.conf
         mode: '0600'
       vars:

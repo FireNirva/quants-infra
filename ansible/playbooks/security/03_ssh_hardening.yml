@@ -322,7 +322,7 @@
     
     - name: Create SSH hardening completion marker
       copy:
-        dest: /etc/quants-security/ssh_hardening_completed
+        dest: /etc/quants-security/ssh_hardened
         content: |
           SSH Hardening Completed
           Timestamp: {{ ansible_date_time.iso8601 }}

@@ -44,32 +44,13 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
 
-    - name: 创建远程配置目录
-      file:
-        path: "/tmp/freqtrade_configs"
-        state: directory
-        mode: '0755'
-      become: true
-
-    - name: 复制配置文件到远程服务器
-      copy:
-        src: "{{ playbook_dir }}/../server/scripts/{{ ansible_host }}/{{ item }}"
-        dest: "/tmp/freqtrade_configs/"
-        mode: '0644'
-      with_items:
-        - "base_config.json"
-        - "{{ hostvars[inventory_hostname].freqtrade_config }}"
-        - "{{ hostvars[inventory_hostname].freqtrade_strategy }}"
-      ignore_errors: true
-
-    - name: 复制主机特定的基础配置文件
-      copy:
-        src: "/tmp/freqtrade_configs/base_config.json"
+    - name: 使用模板生成基础配置文件
+      template:
+        src: "{{ playbook_dir }}/../../templates/common/freqtrade/config.json.j2"
         dest: "{{ user_data_dir }}/base_config.json"
         mode: '0644'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-        remote_src: true
       register: base_config_copy
 
     - name: 创建策略目录
@@ -79,39 +60,49 @@
         mode: '0755'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
+    
+    - name: 创建日志目录
+      file:
+        path: "{{ user_data_dir }}/logs"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
 
     - name: 检查主机特定的策略配置文件是否存在
       stat:
-        path: "/tmp/freqtrade_configs/{{ hostvars[inventory_hostname].freqtrade_config }}"
+        path: "/tmp/freqtrade_configs/{{ freqtrade_config | default('strategy_config.json') }}"
       register: strategy_config_file
+      when: freqtrade_config is defined
 
     - name: 检查主机特定的策略文件是否存在
       stat:
-        path: "/tmp/freqtrade_configs/{{ hostvars[inventory_hostname].freqtrade_strategy }}"
+        path: "/tmp/freqtrade_configs/{{ freqtrade_strategy | default('sample_strategy.py') }}"
       register: strategy_file
+      when: freqtrade_strategy is defined
 
     - name: 复制主机特定的策略配置文件
       copy:
-        src: "/tmp/freqtrade_configs/{{ hostvars[inventory_hostname].freqtrade_config }}"
-        dest: "{{ user_data_dir }}/{{ hostvars[inventory_hostname].freqtrade_config }}"
+        src: "/tmp/freqtrade_configs/{{ freqtrade_config }}"
+        dest: "{{ user_data_dir }}/{{ freqtrade_config }}"
         mode: '0644'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         remote_src: true
-        force: "{{ hostvars[inventory_hostname].force_config_update }}"
-      when: strategy_config_file.stat.exists
+        force: "{{ force_config_update | default(true) }}"
+      when: freqtrade_config is defined and strategy_config_file is not skipped and strategy_config_file.stat.exists
       register: strategy_config_copy
 
     - name: 复制主机特定的策略文件到策略目录
       copy:
-        src: "/tmp/freqtrade_configs/{{ hostvars[inventory_hostname].freqtrade_strategy }}"
-        dest: "{{ user_data_dir }}/strategies/{{ hostvars[inventory_hostname].freqtrade_strategy }}"
+        src: "/tmp/freqtrade_configs/{{ freqtrade_strategy }}"
+        dest: "{{ user_data_dir }}/strategies/{{ freqtrade_strategy }}"
         mode: '0644'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         remote_src: true
-        force: "{{ hostvars[inventory_hostname].force_config_update }}"
-      when: strategy_file.stat.exists
+        force: "{{ force_config_update | default(true) }}"
+      when: freqtrade_strategy is defined and strategy_file is not skipped and strategy_file.stat.exists
       register: strategy_file_copy
 
     - name: 使用默认策略文件（如果主机特定策略不存在）
@@ -142,20 +133,20 @@
         mode: '0644'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-      when: not strategy_file.stat.exists
+      when: freqtrade_strategy is not defined or strategy_file is skipped or not strategy_file.stat.exists
 
     - name: 创建 docker-compose.yml
       template:
-        src: "{{ playbook_dir }}/../templates/freqtrade/docker-compose.yml.j2"
+        src: "{{ playbook_dir }}/../../templates/common/freqtrade/docker-compose.yml.j2"
         dest: "{{ ft_dir }}/docker-compose.yml"
         mode: '0644'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-        force: "{{ hostvars[inventory_hostname].force_config_update }}"
+        force: "{{ force_config_update | default(true) }}"
       vars:
-        base_config: "{{ hostvars[inventory_hostname].freqtrade_base_config }}"
-        strategy_config: "{{ hostvars[inventory_hostname].freqtrade_config }}"
-        strategy_name: "{{ hostvars[inventory_hostname].freqtrade_strategy | splitext | first }}"
+        base_config: "{{ freqtrade_base_config | default('base_config.json') }}"
+        strategy_config: "{{ freqtrade_config | default('') }}"
+        strategy_name: "{{ strategy_name | default('SampleStrategy') }}"
 
     - name: 检查 Docker 是否已安装
       command: docker --version
@@ -170,16 +161,20 @@
       changed_when: false
 
     - name: 拉取 Freqtrade 镜像
-      community.docker.docker_compose:
-        project_src: "{{ ft_dir }}"
-        pull: yes
+      command: docker compose pull
+      args:
+        chdir: "{{ ft_dir }}"
+      become: true
       register: pull_result
+      changed_when: "'Pulling' in pull_result.stdout"
 
     - name: 启动 Freqtrade 容器
-      community.docker.docker_compose:
-        project_src: "{{ ft_dir }}"
-        state: present
+      command: docker compose up -d
+      args:
+        chdir: "{{ ft_dir }}"
+      become: true
       register: compose_result
+      changed_when: "'Created' in compose_result.stdout or 'Started' in compose_result.stdout"
 
     - name: 检查 Freqtrade 容器状态
       command: docker ps -f name=freqtrade
@@ -193,6 +188,7 @@
     - name: 显示配置信息
       debug:
         msg:
-          - "使用的基础配置文件: {{ '自定义配置 (base_config.json)' if base_config_copy.changed else '默认配置' }}"
-          - "使用的策略配置文件: {{ '自定义配置 (' + hostvars[inventory_hostname].freqtrade_config + ')' if strategy_config_copy.changed else '默认配置' }}"
-          - "使用的策略文件: {{ '自定义策略 (' + hostvars[inventory_hostname].freqtrade_strategy + ')' if strategy_file_copy.changed else '默认策略' }}"
+          - "使用的基础配置文件: base_config.json"
+          - "使用的策略: {{ strategy_name | default('SampleStrategy') }}"
+          - "Dry run 模式: {{ dry_run | default(true) }}"
+          - "交易所: {{ exchange_name | default('binance') }}"

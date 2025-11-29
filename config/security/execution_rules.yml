@@ -1,10 +1,14 @@
 # 执行引擎安全规则配置
 # 适用于运行交易执行引擎（Freqtrade/Hummingbot）的实例
 
-# SSH 端口（自定义）
+# ⚠️ 注意：以下 ssh_port 和 wireguard_port 仅作为后备默认值
+# 实际部署时，实例配置中的值会自动覆盖这些默认值
+# 参见 SecurityManager 中的配置保护逻辑
+
+# SSH 端口（后备默认值，实例配置会覆盖）
 ssh_port: 6677
 
-# WireGuard VPN 端口
+# WireGuard VPN 端口（后备默认值，实例配置会覆盖）
 wireguard_port: 51820
 
 # VPN 网络

@@ -147,7 +147,11 @@
         dest: /etc/fail2ban/filter.d/port-scan.conf
         content: |
           # Fail2Ban filter for port scan detection
+          [INCLUDES]
+          before = common.conf
+          
           [Definition]
+          _daemon = sshd
           failregex = ^%(__prefix_line)sRefused connect from \S+ \(.*\)\s*$
                       ^%(__prefix_line)sDid not receive identification string from <HOST>\s*$
                       ^%(__prefix_line)sConnection closed by <HOST> port \d+ \[preauth\]\s*$
@@ -160,7 +164,11 @@
         dest: /etc/fail2ban/filter.d/sshd-ddos.conf
         content: |
           # Fail2Ban filter for SSH DDOS
+          [INCLUDES]
+          before = common.conf
+          
           [Definition]
+          _daemon = sshd
           failregex = ^%(__prefix_line)sDid not receive identification string from <HOST>\s*$
           ignoreregex =
         mode: '0644'
@@ -185,6 +193,14 @@
           RestartSec=5s
         mode: '0644'
       notify: reload systemd
+
+    - name: Ensure runtime dir exists for fail2ban socket
+      file:
+        path: /var/run/fail2ban
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
     
     - name: Enable and start fail2ban service
       systemd:
@@ -193,14 +209,44 @@
         state: started
         daemon_reload: yes
     
-    - name: Wait for fail2ban to start
-      wait_for:
-        timeout: 10
+    - name: Ensure fail2ban is running and socket ready
+      block:
+        - name: Restart fail2ban service
+          systemd:
+            name: fail2ban
+            enabled: yes
+            state: restarted
+            daemon_reload: yes
+
+        - name: Wait for fail2ban socket
+          wait_for:
+            path: /var/run/fail2ban/fail2ban.sock
+            timeout: 45
+            state: present
+          register: fail2ban_socket_ready
+          retries: 3
+          delay: 5
+          until: fail2ban_socket_ready is succeeded
+          failed_when: fail2ban_socket_ready is failed
+      rescue:
+        - name: Collect fail2ban journal for debugging
+          command: journalctl -u fail2ban --no-pager --since "-10 min"
+          register: fail2ban_journal
+          changed_when: false
+          failed_when: false
+
+        - name: Fail because fail2ban socket not ready
+          fail:
+            msg: "fail2ban socket not ready after retries. Recent logs: {{ fail2ban_journal.stdout | default('') | trim }}"
     
     - name: Check fail2ban status
       command: fail2ban-client status
       register: fail2ban_status
       changed_when: false
+      failed_when: fail2ban_status.rc != 0
+      retries: 3
+      delay: 5
+      until: fail2ban_status.rc == 0
     
     - name: Display fail2ban status
       debug:
@@ -210,6 +256,8 @@
       command: fail2ban-client status sshd
       register: sshd_jail_status
       changed_when: false
+      failed_when: sshd_jail_status.rc != 0
+      when: fail2ban_status.rc == 0
     
     - name: Display SSH jail status
       debug:
@@ -373,4 +421,3 @@
     - name: reload systemd
       systemd:
         daemon_reload: yes
-

@@ -58,15 +58,16 @@
       debug:
         msg: "Firewall rules have been generated at /etc/iptables/rules.v4"
     
-    - name: Flush existing iptables rules
-      iptables:
-        flush: yes
-      when: iptables_rules.changed
-    
-    - name: Apply iptables rules
-      shell: iptables-restore < /etc/iptables/rules.v4
+    - name: Apply iptables rules atomically (no flush to avoid connection loss)
+      shell: |
+        # Use iptables-restore which atomically replaces all rules
+        # The --noflush option would preserve existing rules, but we want a complete replacement
+        # iptables-restore reads the entire file and applies atomically, maintaining established connections
+        iptables-restore < /etc/iptables/rules.v4
       when: iptables_rules.changed
       register: iptables_apply
+      args:
+        executable: /bin/bash
     
     - name: Save iptables rules (make persistent)
       shell: netfilter-persistent save
