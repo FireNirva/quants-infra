@@ -47,7 +47,8 @@ class TestSecurityManager:
     @pytest.fixture
     def security_manager(self, security_config, mock_ansible_manager):
         """创建 SecurityManager 实例"""
-        return SecurityManager(security_config)
+        with patch.object(SecurityManager, '_wait_for_instance_ready', return_value=True):
+            return SecurityManager(security_config)
 
     def test_init_security_manager(self, security_manager):
         """测试 SecurityManager 初始化"""
@@ -80,16 +81,20 @@ class TestSecurityManager:
 
     def test_setup_firewall_default_profile(self, security_manager, mock_ansible_manager):
         """测试配置默认防火墙"""
-        result = security_manager.setup_firewall(rules_profile='default')
+        # Mock _load_security_rules to return sample config
+        with patch.object(security_manager, '_load_security_rules', return_value={'vpn_only_ports': []}):
+            result = security_manager.setup_firewall(rules_profile='default')
 
-        assert result is True
-        mock_ansible_manager.run_playbook.assert_called_once()
+            assert result is True
+            mock_ansible_manager.run_playbook.assert_called_once()
 
     def test_setup_firewall_custom_profile(self, security_manager, mock_ansible_manager):
         """测试配置自定义防火墙规则"""
-        result = security_manager.setup_firewall(rules_profile='execution')
+        # Mock _load_security_rules to return sample config
+        with patch.object(security_manager, '_load_security_rules', return_value={'vpn_only_ports': []}):
+            result = security_manager.setup_firewall(rules_profile='execution')
 
-        assert result is True
+            assert result is True
 
     @patch.object(SecurityManager, '_load_security_rules')
     def test_setup_firewall_invalid_profile(self, mock_load_rules, security_manager):
@@ -100,29 +105,55 @@ class TestSecurityManager:
 
         assert result is False
 
-    def test_setup_ssh_hardening_success(self, security_manager, mock_ansible_manager):
-        """测试 SSH 安全加固成功"""
-        result = security_manager.setup_ssh_hardening()
+    def test_setup_ssh_hardening_success(self, security_config, mock_ansible_manager):
+        """测试 SSH 安全加固成功（端口保持不变的场景）"""
+        # 场景：SSH端口已经是6677，不需要改变
+        manager = SecurityManager(security_config)
+        
+        result = manager.setup_ssh_hardening()
 
         assert result is True
         mock_ansible_manager.run_playbook.assert_called_once()
         
-        # 验证使用端口 22 连接进行加固
+        # 验证使用当前端口连接进行加固
         call_args = mock_ansible_manager.run_playbook.call_args
         inventory = call_args[1]['inventory']
-        # 应该使用端口 22 进行连接（当前端口）
-        assert inventory['all']['hosts']['1.2.3.4']['ansible_port'] == 22
-
-    def test_setup_ssh_hardening_port_change(self, security_manager, mock_ansible_manager):
-        """测试 SSH 端口切换"""
-        result = security_manager.setup_ssh_hardening()
-
-        assert result is True
+        # 应该使用当前的 ssh_port 进行连接
+        assert inventory['all']['hosts']['1.2.3.4']['ansible_port'] == 6677
+    
+    def test_setup_ssh_hardening_with_port_change(self, security_config, mock_ansible_manager):
+        """测试 SSH 安全加固成功（端口需要改变的场景）"""
+        # 场景：SSH端口从22改为6677
+        config = security_config.copy()
+        config['ssh_port'] = 22  # 当前端口
+        config['new_ssh_port'] = 6677  # 目标端口
         
-        # 验证目标端口在 extra_vars 中
-        call_args = mock_ansible_manager.run_playbook.call_args
-        extra_vars = call_args[1]['extra_vars']
-        assert extra_vars['ssh_port'] == 6677
+        # Mock _load_security_rules to avoid file I/O
+        with patch.object(SecurityManager, '_wait_for_instance_ready', return_value=True):
+            manager = SecurityManager(config)
+        
+        with patch.object(manager, '_load_security_rules', return_value={'vpn_only_ports': []}):
+            result = manager.setup_ssh_hardening()
+
+            assert result is True
+            
+            # 验证 run_playbook 被调用两次：1次防火墙，1次SSH加固
+            assert mock_ansible_manager.run_playbook.call_count == 2
+            
+            # 验证第一次调用（防火墙更新）
+            first_call = mock_ansible_manager.run_playbook.call_args_list[0]
+            assert '02_setup_firewall.yml' in str(first_call[1]['playbook'])
+            # 防火墙更新使用当前端口22连接
+            assert first_call[1]['inventory']['all']['hosts']['1.2.3.4']['ansible_port'] == 22
+            # 但 extra_vars 中的 ssh_port 是目标端口6677
+            assert first_call[1]['extra_vars']['ssh_port'] == 6677
+            
+            # 验证第二次调用（SSH加固）使用当前端口22连接
+            second_call = mock_ansible_manager.run_playbook.call_args_list[1]
+            assert '03_ssh_hardening.yml' in str(second_call[1]['playbook'])
+            assert second_call[1]['inventory']['all']['hosts']['1.2.3.4']['ansible_port'] == 22
+            # extra_vars 中的 ssh_port 是目标端口6677
+            assert second_call[1]['extra_vars']['ssh_port'] == 6677
 
     def test_install_fail2ban_success(self, security_manager, mock_ansible_manager):
         """测试安装 fail2ban 成功"""
@@ -148,12 +179,120 @@ class TestSecurityManager:
 
         assert result is True
         mock_ansible_manager.run_playbook.assert_called_once()
+    
+    def test_setup_tailscale_success(self, security_manager, mock_ansible_manager):
+        """测试 Tailscale 设置成功"""
+        auth_key = "tskey-auth-test-1234567890abcdef"
+        result = security_manager.setup_tailscale(auth_key)
+        
+        assert result is True
+        mock_ansible_manager.run_playbook.assert_called_once()
+        
+        # 验证调用参数
+        call_args = mock_ansible_manager.run_playbook.call_args
+        assert 'playbook' in call_args[1]
+        assert 'setup_tailscale.yml' in str(call_args[1]['playbook'])
+        
+        # 验证 extra_vars 包含 Tailscale 参数
+        extra_vars = call_args[1]['extra_vars']
+        assert 'tailscale_auth_key' in extra_vars
+        assert extra_vars['tailscale_auth_key'] == auth_key
+        assert extra_vars['tailscale_accept_routes'] is True
+    
+    def test_setup_tailscale_with_routes(self, security_manager, mock_ansible_manager):
+        """测试 Tailscale 设置并通告路由"""
+        auth_key = "tskey-auth-test-1234567890abcdef"
+        routes = "10.0.0.0/24,192.168.1.0/24"
+        
+        result = security_manager.setup_tailscale(
+            auth_key=auth_key,
+            advertise_routes=routes,
+            accept_routes=False
+        )
+        
+        assert result is True
+        
+        # 验证路由参数
+        call_args = mock_ansible_manager.run_playbook.call_args
+        extra_vars = call_args[1]['extra_vars']
+        assert extra_vars['tailscale_advertise_routes'] == routes
+        assert extra_vars['tailscale_accept_routes'] is False
+    
+    def test_setup_tailscale_failure(self, security_manager, mock_ansible_manager):
+        """测试 Tailscale 设置失败"""
+        mock_ansible_manager.run_playbook.return_value = {
+            'rc': 1,
+            'stderr': 'Tailscale installation failed'
+        }
+        
+        auth_key = "tskey-auth-test-1234567890abcdef"
+        result = security_manager.setup_tailscale(auth_key)
+        
+        assert result is False
+    
+    def test_adjust_firewall_for_tailscale_success(self, security_manager, mock_ansible_manager):
+        """测试 Tailscale 防火墙调整成功"""
+        result = security_manager.adjust_firewall_for_tailscale()
+        
+        assert result is True
+        mock_ansible_manager.run_playbook.assert_called_once()
+        
+        # 验证调用参数
+        call_args = mock_ansible_manager.run_playbook.call_args
+        assert '07_adjust_for_tailscale.yml' in str(call_args[1]['playbook'])
+        
+        # 验证 Tailscale 特定参数
+        extra_vars = call_args[1]['extra_vars']
+        assert 'tailscale_network' in extra_vars
+        assert extra_vars['tailscale_network'] == '100.64.0.0/10'
+        assert 'tailscale_interface' in extra_vars
+        assert extra_vars['tailscale_interface'] == 'tailscale0'
+    
+    def test_adjust_firewall_for_tailscale_failure(self, security_manager, mock_ansible_manager):
+        """测试 Tailscale 防火墙调整失败"""
+        mock_ansible_manager.run_playbook.return_value = {
+            'rc': 1,
+            'stderr': 'Firewall adjustment failed'
+        }
+        
+        result = security_manager.adjust_firewall_for_tailscale()
+        
+        assert result is False
 
     def test_adjust_firewall_for_service(self, security_manager, mock_ansible_manager):
         """测试为服务调整防火墙"""
-        result = security_manager.adjust_firewall_for_service('execution')
+        # Mock _load_security_rules to return sample service config
+        with patch.object(security_manager, '_load_security_rules', return_value={'vpn_only_ports': []}):
+            result = security_manager.adjust_firewall_for_service('execution')
 
-        assert result is True
+            assert result is True
+    
+    def test_adjust_firewall_for_service_preserves_ssh_port(self, security_manager, mock_ansible_manager):
+        """测试服务防火墙调整时保护 SSH 端口配置不被覆盖"""
+        # Mock _load_security_rules to return config that tries to override ssh_port
+        service_rules = {
+            'ssh_port': 22,  # 服务规则尝试设置为22
+            'vpn_only_ports': []
+        }
+        
+        with patch.object(security_manager, '_load_security_rules', return_value=service_rules):
+            result = security_manager.adjust_firewall_for_service('data-collector')
+            
+            assert result is True
+            
+            # 验证调用参数
+            call_args = mock_ansible_manager.run_playbook.call_args
+            extra_vars = call_args[1]['extra_vars']
+            
+            # 验证 SSH 端口来自实例配置（6677），而不是服务规则（22）
+            assert extra_vars['ssh_port'] == 6677, \
+                "SSH 端口应该使用实例配置中的值 (6677)，不应被服务规则覆盖"
+            
+            # 验证服务类型已传递
+            assert extra_vars['service_type'] == 'data-collector'
+            
+            # 验证 VPN 专用端口已包含
+            assert 'vpn_only_ports' in extra_vars
 
     def test_verify_security_success(self, security_manager, mock_ansible_manager):
         """测试验证安全配置成功"""
@@ -269,16 +408,17 @@ class TestSecurityManagerEdgeCases:
             manager = SecurityManager(config)
             
             with patch.object(manager.ansible_manager, 'run_playbook') as mock_run:
-                mock_run.return_value = {'rc': 0, 'stdout': '', 'stderr': ''}
-                
-                # 顺序调用所有设置方法
-                assert manager.setup_initial_security() is True
-                assert manager.setup_firewall() is True
-                assert manager.setup_ssh_hardening() is True
-                assert manager.install_fail2ban() is True
-                
-                # 验证所有方法都被调用
-                assert mock_run.call_count == 4
+                with patch.object(manager, '_wait_for_instance_ready', return_value=True):
+                    mock_run.return_value = {'rc': 0, 'stdout': '', 'stderr': ''}
+                    
+                    # 顺序调用所有设置方法
+                    assert manager.setup_initial_security() is True
+                    assert manager.setup_firewall() is True
+                    assert manager.setup_ssh_hardening() is True
+                    assert manager.install_fail2ban() is True
+                    
+                    # 验证所有方法都被调用
+                    assert mock_run.call_count == 4
 
     @patch('core.security_manager.AnsibleManager')
     def test_ansible_connection_error(self, mock_am):
@@ -324,42 +464,193 @@ class TestSecurityManagerIntegration:
     def test_full_security_setup_workflow(self, security_manager):
         """测试完整安全设置工作流"""
         with patch.object(security_manager.ansible_manager, 'run_playbook') as mock_run:
-            mock_run.return_value = {'rc': 0, 'stdout': 'Success', 'stderr': ''}
-            
-            # 完整工作流
-            steps = [
-                ('initial', security_manager.setup_initial_security),
-                ('firewall', security_manager.setup_firewall),
-                ('ssh', security_manager.setup_ssh_hardening),
-                ('fail2ban', security_manager.install_fail2ban),
-                ('verify', security_manager.verify_security)
-            ]
-            
-            results = {}
-            for name, method in steps:
-                results[name] = method()
-            
-            # 验证所有步骤成功
-            assert all(results.values())
-            assert len(results) == 5
+            with patch.object(security_manager, '_wait_for_instance_ready', return_value=True):
+                mock_run.return_value = {'rc': 0, 'stdout': 'Success', 'stderr': ''}
+                
+                # 完整工作流
+                steps = [
+                    ('initial', security_manager.setup_initial_security),
+                    ('firewall', security_manager.setup_firewall),
+                    ('ssh', security_manager.setup_ssh_hardening),
+                    ('fail2ban', security_manager.install_fail2ban),
+                    ('verify', security_manager.verify_security)
+                ]
+                
+                results = {}
+                for name, method in steps:
+                    results[name] = method()
+                
+                # 验证所有步骤成功
+                assert all(results.values())
+                assert len(results) == 5
 
     def test_security_setup_with_rollback(self, security_manager):
         """测试安全设置失败时的回滚"""
         with patch.object(security_manager.ansible_manager, 'run_playbook') as mock_run:
-            # 第3步失败
-            mock_run.side_effect = [
-                {'rc': 0, 'stdout': 'Step 1 OK', 'stderr': ''},
-                {'rc': 0, 'stdout': 'Step 2 OK', 'stderr': ''},
-                {'rc': 1, 'stdout': '', 'stderr': 'Step 3 Failed'}
-            ]
+            with patch.object(security_manager, '_wait_for_instance_ready', return_value=True):
+                # 第3步失败
+                mock_run.side_effect = [
+                    {'rc': 0, 'stdout': 'Step 1 OK', 'stderr': ''},
+                    {'rc': 0, 'stdout': 'Step 2 OK', 'stderr': ''},
+                    {'rc': 1, 'stdout': '', 'stderr': 'Step 3 Failed'}
+                ]
+                
+                # 执行前3步
+                assert security_manager.setup_initial_security() is True
+                assert security_manager.setup_firewall() is True
+                assert security_manager.setup_ssh_hardening() is False
+                
+                # 验证只调用了3次
+                assert mock_run.call_count == 3
+    
+    def test_full_security_setup_with_tailscale(self, security_manager):
+        """测试完整安全设置工作流（含 Tailscale）"""
+        with patch.object(security_manager.ansible_manager, 'run_playbook') as mock_run:
+            with patch.object(security_manager, '_wait_for_instance_ready', return_value=True):
+                with patch.object(security_manager, '_load_security_rules', return_value={}):
+                    mock_run.return_value = {'rc': 0, 'stdout': 'Success', 'stderr': ''}
+                    
+                    # 完整工作流（5 步，含 Tailscale）
+                    steps = [
+                        ('initial', security_manager.setup_initial_security),
+                        ('firewall', security_manager.setup_firewall),
+                        ('ssh', security_manager.setup_ssh_hardening),
+                        ('fail2ban', security_manager.install_fail2ban),
+                        ('tailscale', lambda: security_manager.setup_tailscale('tskey-auth-test-123')),
+                        ('tailscale_firewall', security_manager.adjust_firewall_for_tailscale)
+                    ]
+                    
+                    results = {}
+                    for name, method in steps:
+                        results[name] = method()
+                    
+                    # 验证所有步骤成功
+                    assert all(results.values())
+                    assert len(results) == 6
+                    assert mock_run.call_count == 6
+
+
+class TestTailscaleSpecificScenarios:
+    """Tailscale 特定场景测试"""
+    
+    @pytest.fixture(autouse=True)
+    def mock_path_exists(self):
+        """自动 Mock Path.exists"""
+        with patch('pathlib.Path.exists', return_value=True):
+            yield
+    
+    @pytest.fixture
+    def security_manager(self):
+        """创建用于 Tailscale 测试的 SecurityManager"""
+        config = {
+            'instance_ip': '1.2.3.4',
+            'ssh_user': 'ubuntu',
+            'ssh_key_path': '/path/to/key.pem',
+            'ssh_port': 6677
+        }
+        
+        with patch('core.security_manager.AnsibleManager'):
+            return SecurityManager(config)
+    
+    def test_tailscale_key_masking(self, security_manager, caplog):
+        """测试 Tailscale 密钥不会出现在日志中"""
+        import logging
+        caplog.set_level(logging.INFO)
+        
+        auth_key = "tskey-auth-k1234567890abcdef1234567890"
+        
+        with patch.object(security_manager.ansible_manager, 'run_playbook') as mock_run:
+            mock_run.return_value = {'rc': 0, 'stdout': 'Success', 'stderr': ''}
             
-            # 执行前3步
-            assert security_manager.setup_initial_security() is True
-            assert security_manager.setup_firewall() is True
-            assert security_manager.setup_ssh_hardening() is False
+            security_manager.setup_tailscale(auth_key)
             
-            # 验证只调用了3次
-            assert mock_run.call_count == 3
+            # 检查日志中不包含完整密钥（最重要的安全检查）
+            log_output = caplog.text
+            assert auth_key not in log_output, "完整的 Tailscale 密钥不应出现在日志中"
+            
+            # 验证方法被调用且有日志输出
+            assert "Tailscale VPN" in log_output, "应该有 Tailscale 相关日志"
+            
+            # 验证 playbook 被正确调用，且 auth_key 只传递给 ansible，不记录在日志中
+            mock_run.assert_called_once()
+            call_args = mock_run.call_args
+            assert call_args[1]['extra_vars']['tailscale_auth_key'] == auth_key
+    
+    def test_tailscale_no_routes_parameter(self, security_manager):
+        """测试不提供路由参数时的行为"""
+        auth_key = "tskey-auth-test-123"
+        
+        with patch.object(security_manager.ansible_manager, 'run_playbook') as mock_run:
+            mock_run.return_value = {'rc': 0, 'stdout': 'Success', 'stderr': ''}
+            
+            security_manager.setup_tailscale(auth_key)
+            
+            call_args = mock_run.call_args
+            extra_vars = call_args[1]['extra_vars']
+            
+            # 不应该有 tailscale_advertise_routes 参数
+            assert 'tailscale_advertise_routes' not in extra_vars
+    
+    def test_tailscale_with_multiple_routes(self, security_manager):
+        """测试多个路由通告"""
+        auth_key = "tskey-auth-test-123"
+        routes = "10.0.0.0/24,192.168.1.0/24,172.16.0.0/16"
+        
+        with patch.object(security_manager.ansible_manager, 'run_playbook') as mock_run:
+            mock_run.return_value = {'rc': 0, 'stdout': 'Success', 'stderr': ''}
+            
+            security_manager.setup_tailscale(
+                auth_key=auth_key,
+                advertise_routes=routes
+            )
+            
+            call_args = mock_run.call_args
+            extra_vars = call_args[1]['extra_vars']
+            
+            assert extra_vars['tailscale_advertise_routes'] == routes
+    
+    def test_tailscale_firewall_network_config(self, security_manager):
+        """测试 Tailscale 防火墙网络配置"""
+        with patch.object(security_manager.ansible_manager, 'run_playbook') as mock_run:
+            mock_run.return_value = {'rc': 0, 'stdout': 'Success', 'stderr': ''}
+            
+            security_manager.adjust_firewall_for_tailscale()
+            
+            call_args = mock_run.call_args
+            extra_vars = call_args[1]['extra_vars']
+            
+            # 验证 Tailscale CGNAT 网络范围
+            assert extra_vars['tailscale_network'] == '100.64.0.0/10'
+            assert extra_vars['tailscale_interface'] == 'tailscale0'
+            
+            # 验证基础变量也被传递
+            assert 'ssh_port' in extra_vars
+            assert 'vpn_network' in extra_vars
+    
+    def test_sequential_vpn_setup(self, security_manager):
+        """测试顺序设置 VPN（先 Tailscale 后防火墙）"""
+        auth_key = "tskey-auth-test-123"
+        
+        with patch.object(security_manager.ansible_manager, 'run_playbook') as mock_run:
+            mock_run.return_value = {'rc': 0, 'stdout': 'Success', 'stderr': ''}
+            
+            # 第1步：安装 Tailscale
+            result1 = security_manager.setup_tailscale(auth_key)
+            assert result1 is True
+            
+            # 第2步：调整防火墙
+            result2 = security_manager.adjust_firewall_for_tailscale()
+            assert result2 is True
+            
+            # 验证调用了两次
+            assert mock_run.call_count == 2
+            
+            # 验证调用顺序
+            first_call = mock_run.call_args_list[0]
+            second_call = mock_run.call_args_list[1]
+            
+            assert 'setup_tailscale.yml' in str(first_call[1]['playbook'])
+            assert '07_adjust_for_tailscale.yml' in str(second_call[1]['playbook'])
 
 
 if __name__ == '__main__':
