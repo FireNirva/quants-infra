@@ -1,3 +1,20 @@
+# Quants Infrastructure - Conda Environment Configuration
+#
+# 功能覆盖:
+#   - AWS Lightsail 基础设施管理
+#   - 多服务部署 (Freqtrade, Data Collector, Monitor)
+#   - 企业级安全配置
+#   - Data Lake 数据同步与管理 ⭐
+#   - 完整的测试框架 (单元/集成/E2E/验收)
+#
+# 安装方式:
+#   conda env create -f environment.yml
+#   conda activate quants-infra
+#   pip install -e .
+#
+# 更新环境:
+#   conda env update -f environment.yml --prune
+#
 name: quants-infra
 channels:
   - conda-forge
@@ -14,26 +31,35 @@ dependencies:
       - tabulate>=0.9
       - python-dotenv>=1.0
       
+      # Configuration and validation
+      - pydantic>=2.0  # 用于 Data Lake 配置验证和 schema
+      - pyyaml>=6.0    # 用于配置文件解析
+      
       # Ansible and automation
       - ansible>=8.0
       - ansible-core>=2.15
       - ansible-runner>=2.3
       - jinja2>=3.1
-      - pyyaml>=6.0
       
       # Docker
       - docker>=6.0
       
-      # AWS
+      # AWS (用于云资源管理和 Data Lake E2E 测试)
       - boto3>=1.26
       
-      # SSH and network
+      # SSH and network (用于 Data Lake 远程同步)
       - paramiko>=3.0
       
-      # Development dependencies
+      # Development and testing dependencies
       - pytest>=7.0
       - pytest-cov>=4.0
+      - pytest-html>=3.0  # 用于生成 HTML 测试报告
       - black>=23.0
       - flake8>=6.0
       - mypy>=1.0
+      
+      # Optional: Data analysis (用于 Data Lake 数据分析，可选)
+      # - pandas>=2.0
+      # - numpy>=1.24
+      # - pyarrow>=12.0  # 用于读取 Parquet 文件
 
