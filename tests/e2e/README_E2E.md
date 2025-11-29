@@ -1,13 +1,40 @@
-# Data Collector 端到端测试指南
+# E2E 端到端测试指南
 
 ## 概述
 
-本目录包含 Data Collector 的完整端到端（E2E）测试套件，用于验证从部署到运行的完整工作流。
+本目录包含项目的完整端到端（E2E）测试套件，验证从部署到运行的完整工作流。
 
-## 测试文件
+## 测试文件结构
 
-### 1. `test_data_collector_comprehensive_e2e.py`
-**详尽的 E2E 测试套件** - 包含 11 个测试用例，覆盖所有关键功能
+### 核心 E2E 测试 (Production Ready)
+
+#### 1. `test_infra.py`
+**基础设施测试** - 验证 Lightsail 实例创建、管理和销毁
+
+- 实例生命周期管理
+- 网络配置
+- 资源管理
+- 错误处理
+
+#### 2. `test_security.py`
+**安全配置测试** - 验证防火墙、SSH 加固、fail2ban 等安全功能
+
+- 防火墙规则配置
+- SSH 端口变更和密钥认证
+- fail2ban 入侵防护
+- 安全配置持久性验证
+
+#### 3. `test_monitor.py`
+**监控系统测试** - 验证 Prometheus + Grafana + Alertmanager 完整部署
+
+- 监控栈部署
+- 服务可访问性
+- 抓取目标管理
+- 容器操作
+- 数据收集验证
+
+#### 4. `test_data_collector.py`
+**数据采集器完整测试套件** - 包含 11 个测试用例，覆盖所有关键功能
 
 测试覆盖：
 - ✅ **完整部署流程** (2个测试)
@@ -34,9 +61,6 @@
 
 - ✅ **性能和稳定性** (1个测试)
   - `test_11_long_running_stability`: 长时间运行稳定性
-
-### 2. `test_data_collector_deployment.py`
-**基础 E2E 测试** - 验证基本部署和健康检查
 
 ## 前置条件
 
@@ -83,13 +107,16 @@ pip install pytest pytest-timeout requests
 
 ```bash
 # 运行所有 E2E 测试
-pytest tests/e2e/test_data_collector_comprehensive_e2e.py -v -s --run-e2e
+pytest tests/e2e/ -v -s --run-e2e
+
+# 运行特定测试文件
+pytest tests/e2e/test_data_collector.py -v -s --run-e2e
 
 # 运行特定测试类
-pytest tests/e2e/test_data_collector_comprehensive_e2e.py::TestDataCollectorFullDeployment -v -s --run-e2e
+pytest tests/e2e/test_data_collector.py::TestDataCollectorFullDeployment -v -s --run-e2e
 
 # 运行特定测试
-pytest tests/e2e/test_data_collector_comprehensive_e2e.py::TestDataCollectorFullDeployment::test_01_deploy_data_collector -v -s --run-e2e
+pytest tests/e2e/test_data_collector.py::TestDataCollectorFullDeployment::test_01_deploy_data_collector -v -s --run-e2e
 ```
 
 ### 使用自定义配置
@@ -103,7 +130,7 @@ export TEST_PAIRS=VIRTUAL-USDT,IRON-USDT,BNKR-USDT
 export TEST_METRICS_PORT=8000
 
 # 运行测试
-pytest tests/e2e/test_data_collector_comprehensive_e2e.py -v -s --run-e2e
+pytest tests/e2e/test_data_collector.py -v -s --run-e2e
 ```
 
 ### 运行快速验证测试
@@ -112,9 +139,10 @@ pytest tests/e2e/test_data_collector_comprehensive_e2e.py -v -s --run-e2e
 
 ```bash
 # 运行基础测试（跳过长时间运行和性能测试）
-pytest tests/e2e/test_data_collector_comprehensive_e2e.py \
-  -v -s --run-e2e \
-  -m "not slow"
+pytest tests/e2e/test_data_collector.py -v -s --run-e2e -m "not slow"
+
+# 运行简单快速测试
+pytest tests/e2e/test_data_collector_simple.py -v -s --run-e2e
 ```
 
 ## 测试流程
@@ -328,7 +356,7 @@ done
 
 ```bash
 # 运行测试时启用详细输出
-pytest tests/e2e/test_data_collector_comprehensive_e2e.py -v -s --run-e2e --log-cli-level=DEBUG
+pytest tests/e2e/test_data_collector.py -v -s --run-e2e --log-cli-level=DEBUG
 ```
 
 ### 2. 保留失败的实例
@@ -342,7 +370,7 @@ pytest tests/e2e/test_data_collector_comprehensive_e2e.py -v -s --run-e2e --log-
 
 ```bash
 # 使用 pdb 调试
-pytest tests/e2e/test_data_collector_comprehensive_e2e.py --pdb --run-e2e
+pytest tests/e2e/test_data_collector.py --pdb --run-e2e
 ```
 
 ### 4. 直接运行单个测试
@@ -394,7 +422,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           TEST_AWS_REGION: ap-northeast-1
         run: |
-          pytest tests/e2e/test_data_collector_comprehensive_e2e.py \
+          pytest tests/e2e/test_data_collector.py \
             -v -s --run-e2e \
             --junit-xml=test-results/e2e-results.xml
       
@@ -432,7 +460,7 @@ jobs:
 
 ```bash
 # 生成 HTML 报告
-pytest tests/e2e/test_data_collector_comprehensive_e2e.py \
+pytest tests/e2e/test_data_collector.py \
   -v -s --run-e2e \
   --html=test-reports/e2e-report.html \
   --self-contained-html
@@ -458,7 +486,7 @@ open test-reports/e2e-report.html
 ### Q5: 如何跳过某些测试？
 **A**: 使用 pytest 的 `-k` 选项：
 ```bash
-pytest tests/e2e/test_data_collector_comprehensive_e2e.py -v -s --run-e2e -k "not stability"
+pytest tests/e2e/test_data_collector.py -v -s --run-e2e -k "not stability"
 ```
 
 ## 贡献指南

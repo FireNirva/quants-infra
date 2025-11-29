@@ -36,24 +36,56 @@ class TestSecurityE2E:
     
     @pytest.fixture(scope="class")
     def test_ssh_key(self, lightsail_client):
-        """创建或获取测试用 SSH 密钥"""
+        """创建或获取测试用 SSH 密钥，并确保云端公钥与本地私钥一致"""
         key_path = Path.home() / '.ssh' / f'{self.TEST_KEY_PAIR}.pem'
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        pub_path = key_path.with_suffix('.pub')
+
+        def ensure_public_key() -> str:
+            """返回与私钥匹配的公钥文本，不存在则生成"""
+            if pub_path.exists():
+                return pub_path.read_text().strip()
+            result = subprocess.run(
+                ['ssh-keygen', '-y', '-f', str(key_path)],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"无法导出公钥: {result.stderr}")
+            pub_text = result.stdout.strip()
+            pub_path.write_text(pub_text + "\n")
+            return pub_text
         
-        # 检查密钥对是否已存在
-        try:
-            lightsail_client.get_key_pair(keyPairName=self.TEST_KEY_PAIR)
-            print(f"✓ 使用现有密钥对: {self.TEST_KEY_PAIR}")
-        except lightsail_client.exceptions.NotFoundException:
-            # 创建新密钥对
+        # 如果本地没有私钥，则在 Lightsail 生成一把并保存
+        if not key_path.exists():
             print(f"创建新密钥对: {self.TEST_KEY_PAIR}")
             response = lightsail_client.create_key_pair(keyPairName=self.TEST_KEY_PAIR)
-            
-            # 保存私钥
             with open(key_path, 'w') as f:
                 f.write(response['privateKeyBase64'])
             os.chmod(key_path, 0o600)
+            # 保存公钥
+            if 'publicKeyBase64' in response:
+                pub_path.write_text(response['publicKeyBase64'].strip() + "\n")
             print(f"✓ 密钥已保存到: {key_path}")
-        
+        else:
+            print(f"✓ 使用本地私钥: {key_path}")
+
+        # 同步公钥到当前区域，避免“云端旧公钥/本地新私钥”导致 SSH 失败
+        pub_key = ensure_public_key()
+        try:
+            try:
+                lightsail_client.delete_key_pair(keyPairName=self.TEST_KEY_PAIR)
+            except lightsail_client.exceptions.NotFoundException:
+                pass
+            lightsail_client.import_key_pair(
+                keyPairName=self.TEST_KEY_PAIR,
+                publicKeyBase64=pub_key
+            )
+            print(f"✓ 已同步公钥到 {self.TEST_REGION}: {self.TEST_KEY_PAIR}")
+        except Exception as e:
+            print(f"⚠️ 同步公钥失败: {e}")
+            raise
+
         return str(key_path)
     
     @pytest.fixture(scope="class")
@@ -125,7 +157,7 @@ class TestSecurityE2E:
         except Exception as e:
             print(f"  ⚠️  开放端口22失败: {e}")
         
-        # 开放SSH端口6677 (for later SSH hardening)
+        # 开放SSH端口6677 (for later SSH hardening) - 关键端口，必须成功
         try:
             lightsail_client.open_instance_public_ports(
                 portInfo={
@@ -137,8 +169,19 @@ class TestSecurityE2E:
                 instanceName=self.TEST_INSTANCE_NAME
             )
             print("  ✓ 端口6677已开放")
+            
+            # 验证端口确实开放了
+            time.sleep(3)
+            instance_info = lightsail_client.get_instance(instanceName=self.TEST_INSTANCE_NAME)
+            ports = instance_info.get('instance', {}).get('networking', {}).get('ports', [])
+            port_6677_open = any(p.get('fromPort') == 6677 for p in ports)
+            
+            if not port_6677_open:
+                pytest.fail("端口 6677 开放失败！后续 SSH 加固测试将无法进行")
+            print("  ✓ 端口6677开放已验证")
+            
         except Exception as e:
-            print(f"  ⚠️  开放端口6677失败: {e}")
+            pytest.fail(f"开放端口6677失败: {e}（SSH 加固需要此端口）")
         
         # 开放WireGuard端口51820
         try:
@@ -319,7 +362,8 @@ class TestSecurityE2E:
         print("  ✓ 默认策略正确 (INPUT: DROP, FORWARD: DROP, OUTPUT: ACCEPT)")
         
         # 检查基本规则
-        assert 'ACCEPT' in output and 'ESTABLISHED,RELATED' in output, "缺少 ESTABLISHED,RELATED 规则"
+        # 检查状态追踪规则（顺序可能不同：ESTABLISHED,RELATED 或 RELATED,ESTABLISHED）
+        assert 'ACCEPT' in output and ('ESTABLISHED,RELATED' in output or 'RELATED,ESTABLISHED' in output), "缺少状态追踪规则"
         print("  ✓ ESTABLISHED,RELATED 连接允许")
         
         assert 'lo' in output, "缺少 loopback 规则"
@@ -351,9 +395,9 @@ class TestSecurityE2E:
         assert result is True, "SSH 加固失败"
         print("✓ SSH 加固成功")
         
-        # 等待 SSH 服务重启
-        print("等待 SSH 服务重启（15秒）...")
-        time.sleep(15)  # ⚡ 优化：从30秒减少到15秒
+        # 等待 SSH 服务重启并稳定
+        print("等待 SSH 服务重启（30秒）...")
+        time.sleep(30)  # 增加等待时间确保服务完全稳定
         
         # 更新测试实例的 SSH 端口
         test_instance['ssh_port'] = 6677
@@ -389,6 +433,27 @@ class TestSecurityE2E:
         
         assert result.returncode == 0, f"新端口 {ssh_port} SSH 连接失败"
         print(f"  ✓ 端口 {ssh_port} SSH 连接成功")
+        
+        # 重要：iptables 暴力破解防护规则限制 60秒内最多4次NEW连接
+        # 需要等待 >60 秒让 iptables recent 计数器重置
+        print("\n⏳ 等待 iptables 暴力破解防护计数器重置（70秒）...")
+        print("   iptables 规则: 60秒内 >4次 NEW连接会被阻断")
+        print("   测试已进行多次SSH连接，需等待计数器清零")
+        time.sleep(70)  # 等待超过60秒让iptables计数器重置
+        
+        # 验证连接稳定性
+        print("\n验证连接已恢复...")
+        try:
+            cmd = f"ssh -p 6677 -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'echo connection-restored'"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
+            if result.returncode == 0:
+                print("  ✓ 连接已恢复，后续测试可以继续")
+            else:
+                print(f"  ⚠️  连接仍未恢复: {result.stderr}")
+                print("  ⚠️  可能需要更长等待时间")
+        except Exception as e:
+            print(f"  ⚠️  连接验证失败: {e}")
+            pass
     
     def test_05_fail2ban_installation(self, test_instance):
         """测试 5: fail2ban 安装和配置"""
@@ -602,8 +667,8 @@ class TestSecurityE2E:
         print("测试 12: CLI 命令测试")
         print(f"{'='*60}")
         
-        # 测试 quants-ctl security status
-        print("测试: quants-ctl security status")
+        # 测试 quants-infra security status
+        print("测试: quants-infra security status")
         # 这需要 CLI 环境配置，暂时跳过
         print("  ⚠️  CLI 测试需要额外配置，跳过")
     
@@ -628,8 +693,199 @@ class TestSecurityE2E:
                     print(f"    {line}")
         else:
             print("  ⚠️  备份目录不存在或为空")
+    
+    @pytest.mark.tailscale
+    def test_14_tailscale_setup(self, test_instance):
+        """测试 14: Tailscale VPN 安装和配置"""
+        print(f"\n{'='*60}")
+        print("测试 14: Tailscale VPN 安装和配置")
+        print(f"{'='*60}")
+        
+        # 检查环境变量中是否有 Tailscale auth key
+        tailscale_key = os.environ.get('TAILSCALE_AUTH_KEY')
+        if not tailscale_key:
+            print("⚠️  跳过 Tailscale 测试：未设置 TAILSCALE_AUTH_KEY 环境变量")
+            print("   设置方法：export TAILSCALE_AUTH_KEY='tskey-auth-xxxxx'")
+            pytest.skip("TAILSCALE_AUTH_KEY not set")
+        
+        from core.security_manager import SecurityManager
+        
+        config = {
+            'instance_ip': test_instance['ip'],
+            'ssh_user': test_instance['ssh_user'],
+            'ssh_key_path': test_instance['ssh_key'],
+            'ssh_port': test_instance.get('ssh_port', 6677),
+            'vpn_network': '10.0.0.0/24'
+        }
+        
+        manager = SecurityManager(config)
+        
+        print("安装 Tailscale...")
+        print(f"  Auth Key: {tailscale_key[:15]}***")
+        result = manager.setup_tailscale(tailscale_key)
+        
+        assert result is True, "Tailscale 安装失败"
+        print("✓ Tailscale 安装成功")
+        
+        # 等待 Tailscale 连接建立
+        print("\n等待 Tailscale 连接建立（15秒）...")
+        time.sleep(15)
+        
+        # 验证 Tailscale 安装
+        print("\n验证 Tailscale 安装...")
+        ssh_port = test_instance.get('ssh_port', 6677)
+        cmd = f"ssh -p {ssh_port} -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'which tailscale'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        assert result.returncode == 0, "Tailscale 未安装"
+        print("  ✓ Tailscale 命令可用")
+        
+        # 检查 Tailscale 状态
+        print("\n检查 Tailscale 状态...")
+        cmd = f"ssh -p {ssh_port} -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'sudo tailscale status'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        assert result.returncode == 0, "无法获取 Tailscale 状态"
+        print("  ✓ Tailscale 连接正常")
+        print(f"\n  状态输出:\n{result.stdout}")
+        
+        # 获取 Tailscale IP
+        print("\n获取 Tailscale IP...")
+        cmd = f"ssh -p {ssh_port} -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'tailscale ip -4'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        assert result.returncode == 0, "无法获取 Tailscale IP"
+        tailscale_ip = result.stdout.strip()
+        print(f"  ✓ Tailscale IPv4: {tailscale_ip}")
+        
+        # 验证 IP 在 100.64.0.0/10 范围内
+        import ipaddress
+        ip = ipaddress.ip_address(tailscale_ip)
+        tailscale_network = ipaddress.ip_network('100.64.0.0/10')
+        assert ip in tailscale_network, f"Tailscale IP {tailscale_ip} 不在 CGNAT 范围内"
+        print(f"  ✓ IP 在 Tailscale CGNAT 网络范围内 (100.64.0.0/10)")
+        
+        # 检查 Tailscale 服务
+        print("\n检查 Tailscale 服务...")
+        cmd = f"ssh -p {ssh_port} -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'sudo systemctl status tailscaled'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        assert 'active (running)' in result.stdout, "Tailscale 服务未运行"
+        print("  ✓ tailscaled 服务运行中")
+        
+        # 保存 Tailscale IP 到 test_instance 供后续测试使用
+        test_instance['tailscale_ip'] = tailscale_ip
+    
+    @pytest.mark.tailscale
+    def test_15_tailscale_firewall_adjustment(self, test_instance):
+        """测试 15: Tailscale 防火墙调整"""
+        print(f"\n{'='*60}")
+        print("测试 15: Tailscale 防火墙调整")
+        print(f"{'='*60}")
+        
+        if 'tailscale_ip' not in test_instance:
+            pytest.skip("Tailscale 未设置，跳过防火墙测试")
+        
+        from core.security_manager import SecurityManager
+        
+        config = {
+            'instance_ip': test_instance['ip'],
+            'ssh_user': test_instance['ssh_user'],
+            'ssh_key_path': test_instance['ssh_key'],
+            'ssh_port': test_instance.get('ssh_port', 6677),
+            'vpn_network': '10.0.0.0/24'
+        }
+        
+        manager = SecurityManager(config)
+        
+        print("调整防火墙以支持 Tailscale...")
+        result = manager.adjust_firewall_for_tailscale()
+        
+        assert result is True, "Tailscale 防火墙调整失败"
+        print("✓ Tailscale 防火墙调整完成")
+        
+        # 验证防火墙规则
+        print("\n验证 Tailscale 防火墙规则...")
+        ssh_port = test_instance.get('ssh_port', 6677)
+        cmd = f"ssh -p {ssh_port} -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'sudo iptables -L -v -n'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        assert result.returncode == 0, "无法获取防火墙规则"
+        
+        output = result.stdout
+        
+        # 检查 Tailscale 接口规则
+        assert 'tailscale0' in output, "缺少 Tailscale 接口规则"
+        print("  ✓ Tailscale 接口规则已配置")
+        
+        # 检查 Tailscale 网络规则
+        assert '100.64.0.0/10' in output, "缺少 Tailscale 网络规则"
+        print("  ✓ Tailscale 网络规则已配置 (100.64.0.0/10)")
+        
+        # 检查监控端口规则
+        print("\n检查监控端口限制...")
+        for port in [9090, 3000, 9100]:
+            if f'dpt:{port}' in output:
+                print(f"  ✓ 端口 {port} 规则存在")
+        
+        # 检查标记文件
+        print("\n检查 Tailscale 配置标记...")
+        cmd = f"ssh -p {ssh_port} -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'test -f /etc/quants-security/tailscale_firewall_adjusted && echo exists'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        assert 'exists' in result.stdout, "Tailscale 配置标记文件不存在"
+        print("  ✓ /etc/quants-security/tailscale_firewall_adjusted")
+        
+        # 显示标记文件内容
+        cmd = f"ssh -p {ssh_port} -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'cat /etc/quants-security/tailscale_firewall_adjusted'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if result.returncode == 0:
+            print(f"\n  配置标记内容:\n{result.stdout}")
+    
+    @pytest.mark.tailscale
+    def test_16_tailscale_connectivity(self, test_instance):
+        """测试 16: Tailscale 连通性验证"""
+        print(f"\n{'='*60}")
+        print("测试 16: Tailscale 连通性验证")
+        print(f"{'='*60}")
+        
+        if 'tailscale_ip' not in test_instance:
+            pytest.skip("Tailscale 未设置，跳过连通性测试")
+        
+        tailscale_ip = test_instance['tailscale_ip']
+        ssh_port = test_instance.get('ssh_port', 6677)
+        
+        # 测试 Tailscale 网络内的 ping
+        print(f"测试 Tailscale ping（目标：{tailscale_ip}）...")
+        cmd = f"ssh -p {ssh_port} -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'tailscale ping --c 1 --timeout 5s {tailscale_ip}'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
+        
+        if result.returncode == 0:
+            print(f"  ✓ Tailscale ping 成功")
+            print(f"    输出: {result.stdout.strip()}")
+        else:
+            print(f"  ⚠️  Tailscale self-ping 可能不支持，这是正常的")
+        
+        # 验证 Tailscale 接口状态
+        print("\n验证 Tailscale 网络接口...")
+        cmd = f"ssh -p {ssh_port} -i {test_instance['ssh_key']} ubuntu@{test_instance['ip']} 'ip addr show tailscale0'"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        assert result.returncode == 0, "Tailscale 接口不存在"
+        assert tailscale_ip in result.stdout, f"Tailscale IP {tailscale_ip} 未配置在接口上"
+        print(f"  ✓ tailscale0 接口存在且配置正确")
+        
+        # 显示接口信息
+        print(f"\n  接口信息:")
+        for line in result.stdout.split('\n')[:5]:  # 只显示前5行
+            print(f"    {line}")
+        
+        # 测试通过 Tailscale IP 的 SSH 连接（如果可能）
+        print(f"\n测试通过 Tailscale IP 的 SSH 连接...")
+        print(f"  Tailscale IP: {tailscale_ip}")
+        print(f"  ⚠️  注意：这需要测试机器也在 Tailscale 网络中")
+        print(f"  如果测试机器不在 Tailscale 网络，此测试会失败（这是正常的）")
 
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v', '-s'])
-

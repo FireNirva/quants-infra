@@ -1,7 +1,7 @@
 """
 Infra (基础设施) E2E 测试
 
-测试 quants-ctl infra 命令的完整功能:
+测试 quants-infra infra 命令的完整功能:
 1. 创建 Lightsail 实例
 2. 列出实例
 3. 获取实例信息
@@ -342,7 +342,7 @@ class TestInfraE2E:
 
 
 class TestInfraCLI:
-    """测试 quants-ctl infra CLI 命令"""
+    """测试 quants-infra infra CLI 命令"""
 
     @pytest.fixture(scope="class")
     def cli_test_instance(self):
@@ -363,11 +363,27 @@ class TestInfraCLI:
         try:
             existing = manager.get_instance_info(instance_name)
             if existing:
-                print(f"⚠️  清理已存在的实例...")
+                print(f"⚠️  清理已存在的实例 {instance_name}...")
+                status = existing.get('status', '')
+                
+                # 如果实例在 transition 状态，等待其完成
+                if status in ['stopping', 'pending', 'rebooting']:
+                    print(f"   实例状态: {status}，等待状态稳定...")
+                    for i in range(12):  # 最多等待60秒
+                        time.sleep(5)
+                        try:
+                            current = manager.get_instance_info(instance_name)
+                            current_status = current.get('status', '')
+                            if current_status not in ['stopping', 'pending', 'rebooting']:
+                                break
+                        except:
+                            break
+                
                 manager.destroy_instance(instance_name)
+                print(f"✅ 实例已删除")
                 time.sleep(10)
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️  清理失败: {e}")
         
         # 创建实例
         instance_config = {
@@ -397,12 +413,13 @@ class TestInfraCLI:
             print(f"⚠️  清理失败: {e}")
 
     def test_cli_infra_list(self, cli_test_instance):
-        """测试 CLI: quants-ctl infra list"""
+        """测试 CLI: quants-infra infra list"""
         print(f"\n{'='*60}")
-        print("测试 CLI: quants-ctl infra list")
+        print("测试 CLI: quants-infra infra list")
         print(f"{'='*60}")
         
-        cmd = "quants-ctl infra list"
+        # 指定与测试实例相同的区域
+        cmd = "quants-infra infra list --region us-east-1"
         result = subprocess.run(
             cmd,
             shell=True,
@@ -424,12 +441,13 @@ class TestInfraCLI:
         print(f"✅ CLI 测试通过: infra list")
 
     def test_cli_infra_info(self, cli_test_instance):
-        """测试 CLI: quants-ctl infra info"""
+        """测试 CLI: quants-infra infra info"""
         print(f"\n{'='*60}")
-        print("测试 CLI: quants-ctl infra info")
+        print("测试 CLI: quants-infra infra info")
         print(f"{'='*60}")
         
-        cmd = f"quants-ctl infra info {cli_test_instance}"
+        # 指定与测试实例相同的区域，使用 --name 参数
+        cmd = f"quants-infra infra info --name {cli_test_instance} --region us-east-1"
         result = subprocess.run(
             cmd,
             shell=True,
@@ -476,11 +494,38 @@ class TestStaticIP:
         try:
             existing = lightsail_manager.get_instance_info(instance_name)
             if existing:
-                print(f"⚠️  清理已存在的实例...")
-                lightsail_manager.destroy_instance(instance_name)
-                time.sleep(10)
-        except:
-            pass
+                print(f"⚠️  清理已存在的实例 {instance_name}...")
+                status = existing.get('status', '')
+                
+                # 如果实例在 transition 状态，等待其完成
+                if status in ['stopping', 'pending', 'rebooting']:
+                    print(f"   实例状态: {status}，等待状态稳定...")
+                    max_wait = 60
+                    waited = 0
+                    while waited < max_wait:
+                        time.sleep(5)
+                        waited += 5
+                        try:
+                            current = lightsail_manager.get_instance_info(instance_name)
+                            current_status = current.get('status', '')
+                            print(f"   等待 {waited}s，当前状态: {current_status}")
+                            if current_status not in ['stopping', 'pending', 'rebooting']:
+                                break
+                        except:
+                            # 实例可能已被删除
+                            break
+                
+                # 删除实例
+                try:
+                    lightsail_manager.destroy_instance(instance_name)
+                    print(f"✅ 实例已删除")
+                    time.sleep(10)
+                except Exception as e:
+                    print(f"⚠️  删除实例失败: {e}")
+                    # 如果删除失败但实例名称仍被占用，等待更长时间
+                    time.sleep(20)
+        except Exception as e:
+            print(f"⚠️  清理检查失败: {e}")
         
         # 尝试清理可能残留的静态 IP
         try:
@@ -631,6 +676,7 @@ class TestStaticIP:
         print(f"{'='*60}")
         
         instance_name = static_ip_instance['name']
+        static_ip_name = static_ip_instance['static_ip_name']
         original_ip = static_ip_instance['public_ip']
         
         print(f"原始 IP: {original_ip}")
@@ -691,6 +737,10 @@ class TestStaticIP:
             
             time.sleep(wait_interval)
             elapsed += wait_interval
+        
+        # 注意: Lightsail 的静态 IP 在实例停止时不会自动分离
+        # 这与 EC2 的 Elastic IP 行为不同，Lightsail 静态 IP 保持附加状态
+        print("✓ Lightsail 静态 IP 在实例停止时保持附加")
         
         # 获取启动后的 IP
         info = lightsail_manager.get_instance_info(instance_name)
